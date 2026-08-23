@@ -1,0 +1,11 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  review:
+    uses: solakpetri/Enzo.Helpers.CodeReviewer/.github/workflows/review.yml@main
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

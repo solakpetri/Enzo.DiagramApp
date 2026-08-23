@@ -1,0 +1,85 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Core", "src\Enzo.Diagrams.Core\Enzo.Diagrams.Core.csproj", "{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Language", "src\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj", "{EB00193D-7791-401A-9E81-3304B6A5BD2A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Rendering", "src\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj", "{18178773-B2FA-419C-838D-4610169994B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Cli", "src\Enzo.Diagrams.Cli\Enzo.Diagrams.Cli.csproj", "{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Api", "src\Enzo.Diagrams.Api\Enzo.Diagrams.Api.csproj", "{7E5D0904-739C-448B-AC98-1995828D91D2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Language.Tests", "tests\Enzo.Diagrams.Language.Tests\Enzo.Diagrams.Language.Tests.csproj", "{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Rendering.Tests", "tests\Enzo.Diagrams.Rendering.Tests\Enzo.Diagrams.Rendering.Tests.csproj", "{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Cli.Tests", "tests\Enzo.Diagrams.Cli.Tests\Enzo.Diagrams.Cli.Tests.csproj", "{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Api.Tests", "tests\Enzo.Diagrams.Api.Tests\Enzo.Diagrams.Api.Tests.csproj", "{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18178773-B2FA-419C-838D-4610169994B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18178773-B2FA-419C-838D-4610169994B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18178773-B2FA-419C-838D-4610169994B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18178773-B2FA-419C-838D-4610169994B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E5D0904-739C-448B-AC98-1995828D91D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E5D0904-739C-448B-AC98-1995828D91D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E5D0904-739C-448B-AC98-1995828D91D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E5D0904-739C-448B-AC98-1995828D91D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{EB00193D-7791-401A-9E81-3304B6A5BD2A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{18178773-B2FA-419C-838D-4610169994B1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7E5D0904-739C-448B-AC98-1995828D91D2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{BB95CE24-2D4C-4097-AF31-22B5F32ED2FF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+	EndGlobalSection
+EndGlobal

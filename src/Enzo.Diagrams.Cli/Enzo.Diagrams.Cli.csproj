@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj" />
+    <ProjectReference Include="..\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+</Project>
