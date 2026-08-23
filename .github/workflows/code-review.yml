@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   review:
     uses: solakpetri/Enzo.Helpers.CodeReviewer/.github/workflows/review.yml@main
