@@ -98,14 +98,16 @@ public sealed class SequenceParser
         var fromToken = Expect(TokenKind.Identifier, "Expected source participant identifier.");
         var kind = ReadMessageKind();
         var toToken = Expect(TokenKind.Identifier, "Expected target participant identifier.");
-        Expect(TokenKind.Colon, "Expected ':' before message label.");
-        var label = ReadMessageLabel();
+        var colonToken = Expect(TokenKind.Colon, "Expected ':' before message label.");
+        var label = colonToken is null ? null : ReadMessageLabel();
         RequireLineEnd();
 
-        if (_errors.Count == errorCount && fromToken is not null && toToken is not null && kind is not null && label is not null)
+        if (_errors.Count != errorCount || fromToken is null || toToken is null || kind is null || label is null)
         {
-            messages.Add(new SequenceMessage(fromToken.Text, toToken.Text, kind.Value, label, fromToken.Line, fromToken.Column));
+            return;
         }
+
+        messages.Add(new SequenceMessage(fromToken.Text, toToken.Text, kind.Value, label, fromToken.Line, fromToken.Column));
     }
 
     private SequenceMessageKind? ReadMessageKind()
