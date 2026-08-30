@@ -27,6 +27,17 @@ public sealed class CliApplicationTests
         API --> Customer: Confirmed
         """;
 
+    private const string ValidBpmnSource = """
+        bpmn Order
+        start Received
+        task Validate "Validate order"
+        gateway Available "Stock available?"
+        end Complete
+        Received -> Validate
+        Validate -> Available
+        Available -> Complete : yes
+        """;
+
     [Fact]
     public async Task Validate_ValidDsl_ReturnsSuccess()
     {
@@ -126,6 +137,23 @@ public sealed class CliApplicationTests
         Assert.Equal(0, exitCode);
         Assert.True(File.Exists(outputPath));
         Assert.Contains("Confirmed", await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Render_BpmnSubset_WritesSvg()
+    {
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("order.enzo", ValidBpmnSource);
+        var outputPath = Path.Combine(workspace.Path, "order.svg");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await CliApplication.RunAsync(["render", filePath], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(outputPath));
+        Assert.Contains("Stock available?", await File.ReadAllTextAsync(outputPath));
         Assert.Equal(string.Empty, error.ToString());
     }
 

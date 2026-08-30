@@ -31,6 +31,17 @@ public sealed class DiagramEndpointTests
         API --> Customer: Confirmed
         """;
 
+    private const string ValidBpmnSource = """
+        bpmn Order
+        start Received
+        task Validate "Validate order"
+        gateway Available "Stock available?"
+        end Complete
+        Received -> Validate
+        Validate -> Available
+        Available -> Complete : yes
+        """;
+
     [Fact]
     public async Task Validate_ValidSource_ReturnsSuccess()
     {
@@ -101,6 +112,42 @@ public sealed class DiagramEndpointTests
         var svg = await response.Content.ReadAsStringAsync();
         Assert.Contains("Customer", svg);
         Assert.Contains("Confirmed", svg);
+    }
+
+    [Fact]
+    public async Task Render_ValidBpmnSubset_ReturnsSvg()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidBpmnSource,
+            format = "svg"
+        });
+
+        response.EnsureSuccessStatusCode();
+        var svg = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Stock available?", svg);
+        Assert.Contains("<polygon", svg);
+    }
+
+    [Fact]
+    public async Task Validate_UnsupportedBpmnElement_ReturnsProblemDetails()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new
+        {
+            source = "bpmn Order\npool Sales\nstart Received\nend Complete"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("message").GetString()!.Contains("sequence flow"));
     }
 
     [Fact]

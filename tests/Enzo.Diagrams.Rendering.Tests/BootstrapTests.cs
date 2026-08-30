@@ -50,6 +50,29 @@ public sealed class BootstrapTests
     }
 
     [Fact]
+    public void BpmnSvgRenderer_RendersSubsetShapesAndRasterizes()
+    {
+        var result = BpmnParser.Parse("""
+            bpmn Order
+            start Received
+            task Validate "Validate order"
+            gateway Available "Stock available?"
+            end Complete
+            Received -> Validate
+            Validate -> Available
+            Available -> Complete : yes
+            """);
+        var svg = BpmnSvgRenderer.Render(BpmnLayoutEngine.Layout(result.Diagram!));
+
+        var png = FlowchartPngRenderer.Render(svg);
+
+        Assert.Contains("<circle", svg);
+        Assert.Contains("<polygon", svg);
+        Assert.Contains("Stock available?", svg);
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
     public void PngRenderer_InvalidSvg_ThrowsControlledException()
     {
         var exception = Assert.Throws<FlowchartPngRenderException>(() => FlowchartPngRenderer.Render("not svg"));

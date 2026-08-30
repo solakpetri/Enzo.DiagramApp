@@ -16,6 +16,11 @@ public static class DiagramSvgRenderer
             return FlowchartSvgRenderer.Render(FlowchartLayoutEngine.Layout(result.Flowchart));
         }
 
+        if (result.BpmnDiagram is not null)
+        {
+            return BpmnSvgRenderer.Render(BpmnLayoutEngine.Layout(result.BpmnDiagram));
+        }
+
         return SequenceSvgRenderer.Render(SequenceLayoutEngine.Layout(result.SequenceDiagram!));
     }
 }
