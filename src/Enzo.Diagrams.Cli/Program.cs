@@ -107,14 +107,13 @@ public static class CliApplication
             return FailureExitCode;
         }
 
-        if (!result.IsSuccess || result.Flowchart is null)
+        if (!result.IsSuccess)
         {
             WriteParseErrors(filePath, result, error);
             return FailureExitCode;
         }
 
-        var layout = FlowchartLayoutEngine.Layout(result.Flowchart);
-        var svg = FlowchartSvgRenderer.Render(layout);
+        var svg = DiagramSvgRenderer.Render(result);
 
         try
         {
@@ -142,7 +141,7 @@ public static class CliApplication
         return SuccessExitCode;
     }
 
-    private static async Task<FlowchartParseResult?> ParseFileAsync(
+    private static async Task<DiagramParseResult?> ParseFileAsync(
         string filePath,
         TextWriter error,
         CancellationToken cancellationToken)
@@ -156,7 +155,7 @@ public static class CliApplication
         try
         {
             var source = await File.ReadAllTextAsync(filePath, cancellationToken);
-            return FlowchartParser.Parse(source);
+            return DiagramParser.Parse(source);
         }
         catch (Exception exception) when (IsFileAccessException(exception))
         {
@@ -268,7 +267,7 @@ public static class CliApplication
 
     private static void WriteParseErrors(
         string filePath,
-        FlowchartParseResult result,
+        DiagramParseResult result,
         TextWriter error)
     {
         error.WriteLine($"Invalid: {filePath}");

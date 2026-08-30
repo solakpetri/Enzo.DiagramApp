@@ -30,6 +30,26 @@ public sealed class BootstrapTests
     }
 
     [Fact]
+    public void SequenceSvgRenderer_RendersMessagesAndRasterizes()
+    {
+        var result = SequenceParser.Parse("""
+            sequence Checkout
+            actor Customer
+            participant API
+            Customer -> API: Checkout
+            API --> Customer: Confirmed
+            """);
+        var layout = SequenceLayoutEngine.Layout(result.SequenceDiagram!);
+        var svg = SequenceSvgRenderer.Render(layout);
+
+        var png = FlowchartPngRenderer.Render(svg);
+
+        Assert.Contains("Customer", svg);
+        Assert.Contains("stroke-dasharray=\"6 6\"", svg);
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
     public void PngRenderer_InvalidSvg_ThrowsControlledException()
     {
         var exception = Assert.Throws<FlowchartPngRenderException>(() => FlowchartPngRenderer.Render("not svg"));

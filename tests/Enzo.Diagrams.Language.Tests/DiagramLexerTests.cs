@@ -63,4 +63,28 @@ public sealed class DiagramLexerTests
             ],
             result.Tokens.Select(token => token.Kind).ToArray());
     }
+
+    [Fact]
+    public void Tokenize_RecognizesSequenceTokens()
+    {
+        var result = DiagramLexer.Tokenize("sequence Checkout\nactor Customer\nPayment --> API : Success");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            [
+                TokenKind.Sequence,
+                TokenKind.Identifier,
+                TokenKind.EndOfLine,
+                TokenKind.Actor,
+                TokenKind.Identifier,
+                TokenKind.EndOfLine,
+                TokenKind.Identifier,
+                TokenKind.DashedArrow,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.Identifier,
+                TokenKind.EndOfFile
+            ],
+            result.Tokens.Select(token => token.Kind).ToArray());
+    }
 }
