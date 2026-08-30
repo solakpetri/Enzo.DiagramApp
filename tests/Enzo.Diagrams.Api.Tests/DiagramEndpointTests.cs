@@ -72,6 +72,21 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task Render_MissingFormat_ReturnsProblemDetails()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/render", new { source = ValidSource });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "required");
+    }
+
+    [Fact]
     public async Task Validate_MalformedRequest_ReturnsProblemDetails()
     {
         await using var factory = new WebApplicationFactory<global::Program>();

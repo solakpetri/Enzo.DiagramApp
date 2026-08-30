@@ -44,6 +44,13 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
         return inputError;
     }
 
+    if (string.IsNullOrWhiteSpace(request.Format))
+    {
+        return InvalidRequestProblem("Format is required.", [
+            new DiagramProblemError("request", null, null, "Format is required.", "required")
+        ]);
+    }
+
     if (!string.Equals(request.Format, "svg", StringComparison.OrdinalIgnoreCase))
     {
         return InvalidRequestProblem("Only SVG rendering is supported.", [
