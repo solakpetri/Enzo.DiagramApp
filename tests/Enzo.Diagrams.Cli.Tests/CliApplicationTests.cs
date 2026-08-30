@@ -102,6 +102,25 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task Render_PngFormat_WritesPng()
+    {
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("checkout.enzo", ValidSource);
+        var outputPath = Path.Combine(workspace.Path, "checkout.png");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await CliApplication.RunAsync(["render", filePath, "--format", "png"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(outputPath));
+        var png = await File.ReadAllBytesAsync(outputPath);
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+        Assert.Contains($"Rendered: {outputPath}", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
     public async Task Render_InvalidDsl_DoesNotCreateOutput()
     {
         using var workspace = TestWorkspace.Create();
@@ -169,4 +188,6 @@ public sealed class CliApplicationTests
             }
         }
     }
+
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 }

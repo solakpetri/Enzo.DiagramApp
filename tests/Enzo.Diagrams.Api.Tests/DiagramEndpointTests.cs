@@ -9,6 +9,8 @@ namespace Enzo.Diagrams.Api.Tests;
 
 public sealed class DiagramEndpointTests
 {
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
     private const string ValidSource = """
         flow Checkout
         start Begin "Order received"
@@ -69,6 +71,24 @@ public sealed class DiagramEndpointTests
         var svg = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("<?xml", svg);
         Assert.Contains("<svg", svg);
+    }
+
+    [Fact]
+    public async Task Render_PngFormat_ReturnsPng()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png"
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        var png = await response.Content.ReadAsByteArrayAsync();
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
     }
 
     [Fact]

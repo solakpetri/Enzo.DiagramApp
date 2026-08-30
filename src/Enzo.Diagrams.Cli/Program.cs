@@ -96,7 +96,7 @@ public static class CliApplication
         TextWriter error,
         CancellationToken cancellationToken)
     {
-        if (!TryReadRenderArguments(args, out var filePath, out var outputPath, error))
+        if (!TryReadRenderArguments(args, out var filePath, out var outputPath, out var format, error))
         {
             return FailureExitCode;
         }
@@ -118,7 +118,19 @@ public static class CliApplication
 
         try
         {
-            await File.WriteAllTextAsync(outputPath, svg, cancellationToken);
+            if (string.Equals(format, "png", StringComparison.OrdinalIgnoreCase))
+            {
+                await File.WriteAllBytesAsync(outputPath, FlowchartPngRenderer.Render(svg), cancellationToken);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(outputPath, svg, cancellationToken);
+            }
+        }
+        catch (FlowchartPngRenderException exception)
+        {
+            error.WriteLine($"Error: {exception.Message}");
+            return FailureExitCode;
         }
         catch (Exception exception) when (IsFileAccessException(exception))
         {
@@ -157,23 +169,53 @@ public static class CliApplication
         string[] args,
         out string filePath,
         out string outputPath,
+        out string format,
         TextWriter error)
     {
         filePath = args[1];
-        outputPath = Path.ChangeExtension(filePath, ".svg");
+        format = "svg";
+        outputPath = string.Empty;
 
         for (var index = 2; index < args.Length; index++)
         {
-            if (args[index] != "--output" || index + 1 >= args.Length)
+            if (index + 1 >= args.Length)
             {
                 WriteUsage(error);
                 return false;
             }
 
-            outputPath = args[++index];
+            switch (args[index])
+            {
+                case "--output":
+                    outputPath = args[++index];
+                    break;
+                case "--format":
+                    format = args[++index];
+                    break;
+                default:
+                    WriteUsage(error);
+                    return false;
+            }
+        }
+
+        if (!IsSupportedRenderFormat(format))
+        {
+            error.WriteLine("Error: format must be 'svg' or 'png'.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            outputPath = Path.ChangeExtension(filePath, $".{format.ToLowerInvariant()}");
         }
 
         return TryNormalizeOutputPath(filePath, outputPath, out outputPath, error);
+    }
+
+    private static bool IsSupportedRenderFormat(string format)
+    {
+        return string.Equals(format, "svg", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(format, "png", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryNormalizeOutputPath(
@@ -252,7 +294,7 @@ public static class CliApplication
     {
         error.WriteLine("Usage:");
         error.WriteLine("  enzo-diagram validate <file>");
-        error.WriteLine("  enzo-diagram render <file> [--output <file>]");
+        error.WriteLine("  enzo-diagram render <file> [--format svg|png] [--output <file>]");
     }
 
     private static bool IsFileAccessException(Exception exception)

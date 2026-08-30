@@ -51,10 +51,10 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
         ]);
     }
 
-    if (!string.Equals(request.Format, "svg", StringComparison.OrdinalIgnoreCase))
+    if (!IsSupportedRenderFormat(request.Format))
     {
-        return InvalidRequestProblem("Only SVG rendering is supported.", [
-            new DiagramProblemError("request", null, null, "Format must be 'svg'.", "unsupported_format")
+        return InvalidRequestProblem("Only SVG and PNG rendering are supported.", [
+            new DiagramProblemError("request", null, null, "Format must be 'svg' or 'png'.", "unsupported_format")
         ]);
     }
 
@@ -67,10 +67,25 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
     var layout = FlowchartLayoutEngine.Layout(result.Flowchart);
     var svg = FlowchartSvgRenderer.Render(layout);
 
+    if (string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            return Results.File(FlowchartPngRenderer.Render(svg), "image/png");
+        }
+        catch (FlowchartPngRenderException)
+        {
+            return InvalidRequestProblem("Diagram could not be rendered as PNG.", [
+                new DiagramProblemError("rendering", null, null, "Diagram could not be rendered as PNG.", "png_render_failed")
+            ]);
+        }
+    }
+
     return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
 })
 .Accepts<RenderDiagramRequest>("application/json")
 .Produces(StatusCodes.Status200OK, contentType: "image/svg+xml")
+.Produces(StatusCodes.Status200OK, contentType: "image/png")
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.Run();
@@ -115,6 +130,12 @@ static bool TryGetSource(string? value, out string source, out IResult error)
         new DiagramProblemError("request", null, null, "Source is required.", "required")
     ]);
     return false;
+}
+
+static bool IsSupportedRenderFormat(string format)
+{
+    return string.Equals(format, "svg", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(format, "png", StringComparison.OrdinalIgnoreCase);
 }
 
 static IResult DiagramProblem(FlowchartParseResult result)

@@ -1,11 +1,39 @@
+using Enzo.Diagrams.Language;
 using Xunit;
 
 namespace Enzo.Diagrams.Rendering.Tests;
 
 public sealed class BootstrapTests
 {
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
     [Fact]
     public void ProjectBuilds()
     {
+    }
+
+    [Fact]
+    public void PngRenderer_RasterizesGeneratedSvg()
+    {
+        var result = FlowchartParser.Parse("""
+            flow Checkout
+            start Begin "Order received"
+            end Complete "Complete order"
+            Begin -> Complete
+            """);
+        var layout = FlowchartLayoutEngine.Layout(result.Flowchart!);
+        var svg = FlowchartSvgRenderer.Render(layout);
+
+        var png = FlowchartPngRenderer.Render(svg);
+
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
+    public void PngRenderer_InvalidSvg_ThrowsControlledException()
+    {
+        var exception = Assert.Throws<FlowchartPngRenderException>(() => FlowchartPngRenderer.Render("not svg"));
+
+        Assert.Equal("SVG could not be rasterized.", exception.Message);
     }
 }
