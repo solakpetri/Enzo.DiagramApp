@@ -61,7 +61,7 @@ public sealed class SequenceParser
 
         var diagram = new SequenceDiagram(nameToken.Text, participants, messages, sequenceToken.Line, sequenceToken.Column);
 
-        return new SequenceParseResult(diagram, _errors, []);
+        return new SequenceParseResult(diagram, _errors, SequenceValidator.Validate(diagram));
     }
 
     private bool TryReadParticipant(List<SequenceParticipant> participants)
