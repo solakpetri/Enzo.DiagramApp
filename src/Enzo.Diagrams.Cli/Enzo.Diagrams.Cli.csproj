@@ -7,6 +7,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <AssemblyName>enzo-diagram</AssemblyName>
+    <RootNamespace>Enzo.Diagrams.Cli</RootNamespace>
   </PropertyGroup>
 
 </Project>
