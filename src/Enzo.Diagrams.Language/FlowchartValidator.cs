@@ -62,7 +62,65 @@ public static class FlowchartValidator
                 $"Diagram '{flowchart.Name}' must contain an end node."));
         }
 
+        if (errors.Count == 0)
+        {
+            DetectCycle(flowchart, errors);
+        }
+
         return errors;
+    }
+
+    private static void DetectCycle(
+        Flowchart flowchart,
+        List<FlowchartValidationError> errors)
+    {
+        var outgoing = flowchart.Nodes.ToDictionary(
+            node => node.Id,
+            _ => new List<string>(),
+            StringComparer.Ordinal);
+        var incomingCounts = flowchart.Nodes.ToDictionary(
+            node => node.Id,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        foreach (var edge in flowchart.Edges)
+        {
+            outgoing[edge.FromId].Add(edge.ToId);
+            incomingCounts[edge.ToId]++;
+        }
+
+        var queue = new Queue<string>(flowchart.Nodes
+            .Where(node => incomingCounts[node.Id] == 0)
+            .Select(node => node.Id));
+        var processed = new HashSet<string>(StringComparer.Ordinal);
+
+        while (queue.Count > 0)
+        {
+            var nodeId = queue.Dequeue();
+            processed.Add(nodeId);
+
+            foreach (var targetId in outgoing[nodeId])
+            {
+                incomingCounts[targetId]--;
+                if (incomingCounts[targetId] == 0)
+                {
+                    queue.Enqueue(targetId);
+                }
+            }
+        }
+
+        var cycleNode = flowchart.Nodes.FirstOrDefault(node => !processed.Contains(node.Id));
+        if (cycleNode is null)
+        {
+            return;
+        }
+
+        errors.Add(new FlowchartValidationError(
+            FlowchartValidationErrorKind.CycleDetected,
+            cycleNode.Line,
+            cycleNode.Column,
+            $"Diagram '{flowchart.Name}' contains a cycle involving node '{cycleNode.Id}'.",
+            NodeId: cycleNode.Id));
     }
 
     private static FlowchartValidationError UnknownNodeError(
