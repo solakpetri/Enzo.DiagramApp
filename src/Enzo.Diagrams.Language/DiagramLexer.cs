@@ -51,6 +51,15 @@ public sealed class DiagramLexer
                 continue;
             }
 
+            if (current == '-' && Peek() == '-' && Peek(2) == '>')
+            {
+                AddToken(TokenKind.DashedArrow, "-->");
+                Advance();
+                Advance();
+                Advance();
+                continue;
+            }
+
             if (current == '-' && Peek() == '>')
             {
                 AddToken(TokenKind.Arrow, "->");
@@ -88,10 +97,13 @@ public sealed class DiagramLexer
         var kind = text switch
         {
             "flow" => TokenKind.Flow,
+            "sequence" => TokenKind.Sequence,
             "start" => TokenKind.Start,
             "task" => TokenKind.Task,
             "decision" => TokenKind.Decision,
             "end" => TokenKind.End,
+            "actor" => TokenKind.Actor,
+            "participant" => TokenKind.Participant,
             _ => TokenKind.Identifier
         };
 
@@ -157,7 +169,12 @@ public sealed class DiagramLexer
 
     private char Peek()
     {
-        var next = _index + 1;
+        return Peek(1);
+    }
+
+    private char Peek(int offset)
+    {
+        var next = _index + offset;
 
         return next >= _source.Length ? '\0' : _source[next];
     }
