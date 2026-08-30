@@ -96,6 +96,11 @@ public static class FlowchartValidator
 
         foreach (var knownNodeId in knownNodeIds)
         {
+            if (Math.Abs(nodeId.Length - knownNodeId.Length) > 2)
+            {
+                continue;
+            }
+
             var distance = LevenshteinDistance(nodeId, knownNodeId);
             if (distance < closestDistance)
             {
