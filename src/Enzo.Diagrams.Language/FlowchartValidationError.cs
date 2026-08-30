@@ -16,5 +16,6 @@ public enum FlowchartValidationErrorKind
     UnknownEdgeSource,
     UnknownEdgeTarget,
     MissingStartNode,
-    MissingEndNode
+    MissingEndNode,
+    CycleDetected
 }

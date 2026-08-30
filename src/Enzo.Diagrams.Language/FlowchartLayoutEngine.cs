@@ -24,12 +24,18 @@ public static class FlowchartLayoutEngine
 
         var layers = AssignLayers(flowchart);
         var unnormalizedNodes = PositionNodes(flowchart, layers);
-        var bounds = CalculateBounds(unnormalizedNodes);
-        var nodes = NormalizeNodes(unnormalizedNodes, bounds);
+        var contentBounds = CalculateContentBounds(unnormalizedNodes);
+        var offset = new DiagramPoint(Margin - contentBounds.X, Margin - contentBounds.Y);
+        var nodes = NormalizeNodes(unnormalizedNodes, offset);
         var nodesById = nodes.ToDictionary(node => node.Node.Id, StringComparer.Ordinal);
         var connections = PositionConnections(flowchart, nodesById);
+        var canvasBounds = new DiagramBounds(
+            0,
+            0,
+            contentBounds.Width + (Margin * 2),
+            contentBounds.Height + (Margin * 2));
 
-        return new FlowchartLayout(nodes, connections, new DiagramBounds(0, 0, bounds.Width, bounds.Height));
+        return new FlowchartLayout(nodes, connections, canvasBounds);
     }
 
     private static Dictionary<string, int> AssignLayers(Flowchart flowchart)
@@ -73,15 +79,9 @@ public static class FlowchartLayoutEngine
             }
         }
 
-        if (processed.Count == flowchart.Nodes.Count)
+        if (processed.Count != flowchart.Nodes.Count)
         {
-            return layers;
-        }
-
-        var fallbackLayer = layers.Values.Max() + 1;
-        foreach (var node in flowchart.Nodes.Where(node => !processed.Contains(node.Id)))
-        {
-            layers[node.Id] = fallbackLayer++;
+            throw new InvalidOperationException("Flowchart contains a cycle.");
         }
 
         return layers;
@@ -110,7 +110,7 @@ public static class FlowchartLayoutEngine
         return positionedNodes;
     }
 
-    private static DiagramBounds CalculateBounds(IReadOnlyList<PositionedFlowchartNode> nodes)
+    private static DiagramBounds CalculateContentBounds(IReadOnlyList<PositionedFlowchartNode> nodes)
     {
         var minX = nodes.Min(node => node.X);
         var minY = nodes.Min(node => node.Y);
@@ -118,21 +118,21 @@ public static class FlowchartLayoutEngine
         var maxY = nodes.Max(node => node.Y + node.Size.Height);
 
         return new DiagramBounds(
-            Margin - minX,
-            Margin - minY,
-            maxX - minX + (Margin * 2),
-            maxY - minY + (Margin * 2));
+            minX,
+            minY,
+            maxX - minX,
+            maxY - minY);
     }
 
     private static List<PositionedFlowchartNode> NormalizeNodes(
         IReadOnlyList<PositionedFlowchartNode> nodes,
-        DiagramBounds bounds)
+        DiagramPoint offset)
     {
         return nodes
             .Select(node => node with
             {
-                X = node.X + bounds.X,
-                Y = node.Y + bounds.Y
+                X = node.X + offset.X,
+                Y = node.Y + offset.Y
             })
             .ToList();
     }
