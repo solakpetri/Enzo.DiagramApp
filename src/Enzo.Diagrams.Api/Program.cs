@@ -1,6 +1,8 @@
+using System.Text;
 using System.Text.Json;
 using Enzo.Diagrams.Api;
 using Enzo.Diagrams.Language;
+using Enzo.Diagrams.Rendering;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -27,6 +29,41 @@ app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken ca
 })
 .Accepts<ValidateDiagramRequest>("application/json")
 .Produces<ValidateDiagramResponse>()
+.ProducesProblem(StatusCodes.Status400BadRequest);
+
+app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken cancellationToken) =>
+{
+    var (request, readError) = await ReadRequestAsync<RenderDiagramRequest>(httpRequest, cancellationToken);
+    if (readError is not null)
+    {
+        return readError;
+    }
+
+    if (!TryGetSource(request!.Source, out var source, out var inputError))
+    {
+        return inputError;
+    }
+
+    if (!string.Equals(request.Format, "svg", StringComparison.OrdinalIgnoreCase))
+    {
+        return InvalidRequestProblem("Only SVG rendering is supported.", [
+            new DiagramProblemError("request", null, null, "Format must be 'svg'.", "unsupported_format")
+        ]);
+    }
+
+    var result = FlowchartParser.Parse(source);
+    if (!result.IsSuccess || result.Flowchart is null)
+    {
+        return DiagramProblem(result);
+    }
+
+    var layout = FlowchartLayoutEngine.Layout(result.Flowchart);
+    var svg = FlowchartSvgRenderer.Render(layout);
+
+    return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
+})
+.Accepts<RenderDiagramRequest>("application/json")
+.Produces(StatusCodes.Status200OK, contentType: "image/svg+xml")
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.Run();
