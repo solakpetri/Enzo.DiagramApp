@@ -28,4 +28,12 @@ public sealed class BootstrapTests
 
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
     }
+
+    [Fact]
+    public void PngRenderer_InvalidSvg_ThrowsControlledException()
+    {
+        var exception = Assert.Throws<FlowchartPngRenderException>(() => FlowchartPngRenderer.Render("not svg"));
+
+        Assert.Equal("SVG could not be rasterized.", exception.Message);
+    }
 }

@@ -11,15 +11,26 @@ public static class FlowchartPngRenderer
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(svg));
         using var skSvg = new SKSvg();
 
-        if (skSvg.Load(stream) is null || skSvg.Picture is null)
+        try
         {
-            throw new InvalidOperationException("SVG could not be rasterized.");
+            if (skSvg.Load(stream) is null || skSvg.Picture is null)
+            {
+                throw new FlowchartPngRenderException("SVG could not be rasterized.");
+            }
+
+            using var output = new MemoryStream();
+            using var colorSpace = SKColorSpace.CreateSrgb();
+            skSvg.Picture.ToImage(output, SKColors.Empty, SKEncodedImageFormat.Png, 100, 1f, 1f, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
+
+            return output.ToArray();
         }
-
-        using var output = new MemoryStream();
-        using var colorSpace = SKColorSpace.CreateSrgb();
-        skSvg.Picture.ToImage(output, SKColors.Empty, SKEncodedImageFormat.Png, 100, 1f, 1f, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
-
-        return output.ToArray();
+        catch (FlowchartPngRenderException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new FlowchartPngRenderException("SVG could not be rasterized.", exception);
+        }
     }
 }

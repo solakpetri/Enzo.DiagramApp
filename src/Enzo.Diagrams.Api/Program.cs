@@ -67,9 +67,21 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
     var layout = FlowchartLayoutEngine.Layout(result.Flowchart);
     var svg = FlowchartSvgRenderer.Render(layout);
 
-    return string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase)
-        ? Results.File(FlowchartPngRenderer.Render(svg), "image/png")
-        : Results.Text(svg, "image/svg+xml", Encoding.UTF8);
+    if (string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            return Results.File(FlowchartPngRenderer.Render(svg), "image/png");
+        }
+        catch (FlowchartPngRenderException)
+        {
+            return InvalidRequestProblem("Diagram could not be rendered as PNG.", [
+                new DiagramProblemError("rendering", null, null, "Diagram could not be rendered as PNG.", "png_render_failed")
+            ]);
+        }
+    }
+
+    return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
 })
 .Accepts<RenderDiagramRequest>("application/json")
 .Produces(StatusCodes.Status200OK, contentType: "image/svg+xml")

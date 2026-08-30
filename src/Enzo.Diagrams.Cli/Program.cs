@@ -127,6 +127,11 @@ public static class CliApplication
                 await File.WriteAllTextAsync(outputPath, svg, cancellationToken);
             }
         }
+        catch (FlowchartPngRenderException exception)
+        {
+            error.WriteLine($"Error: {exception.Message}");
+            return FailureExitCode;
+        }
         catch (Exception exception) when (IsFileAccessException(exception))
         {
             error.WriteLine($"Error: could not write '{outputPath}'. {exception.Message}");
