@@ -11,7 +11,8 @@ public static class DiagramParser
         {
             TokenKind.Flow => FromFlowchart(FlowchartParser.Parse(source)),
             TokenKind.Sequence => FromSequence(SequenceParser.Parse(source)),
-            _ => new DiagramParseResult(null, null, [.. tokenizeResult.Errors, new DiagramSyntaxError(firstToken.Line, firstToken.Column, "Expected flow or sequence declaration.")], [])
+            TokenKind.Identifier when firstToken.Text == "bpmn" => FromBpmn(BpmnParser.Parse(source)),
+            _ => new DiagramParseResult(null, null, null, [.. tokenizeResult.Errors, new DiagramSyntaxError(firstToken.Line, firstToken.Column, "Expected flow, sequence, or bpmn declaration.")], [])
         };
     }
 
@@ -19,6 +20,7 @@ public static class DiagramParser
     {
         return new DiagramParseResult(
             result.Flowchart,
+            null,
             null,
             result.Errors,
             result.ValidationErrors.Select(error => new DiagramValidationError(error.Kind.ToString(), error.Line, error.Column, error.Message)).ToList());
@@ -29,6 +31,17 @@ public static class DiagramParser
         return new DiagramParseResult(
             null,
             result.SequenceDiagram,
+            null,
+            result.Errors,
+            result.ValidationErrors.Select(error => new DiagramValidationError(error.Kind.ToString(), error.Line, error.Column, error.Message)).ToList());
+    }
+
+    private static DiagramParseResult FromBpmn(BpmnParseResult result)
+    {
+        return new DiagramParseResult(
+            null,
+            null,
+            result.Diagram,
             result.Errors,
             result.ValidationErrors.Select(error => new DiagramValidationError(error.Kind.ToString(), error.Line, error.Column, error.Message)).ToList());
     }
