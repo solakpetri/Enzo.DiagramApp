@@ -48,6 +48,23 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task Validate_CancelledToken_ReturnsFailure()
+    {
+        using var workspace = TestWorkspace.Create();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var filePath = workspace.WriteFile("checkout.enzo", ValidSource);
+        var output = new StringWriter();
+        var error = new StringWriter();
+        cancellationTokenSource.Cancel();
+
+        var exitCode = await CliApplication.RunAsync(["validate", filePath], output, error, cancellationTokenSource.Token);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("Cancelled.", error.ToString());
+    }
+
+    [Fact]
     public async Task Render_ValidDsl_WritesDefaultSvg()
     {
         using var workspace = TestWorkspace.Create();
@@ -99,6 +116,24 @@ public sealed class CliApplicationTests
         Assert.False(File.Exists(outputPath));
         Assert.Equal(string.Empty, output.ToString());
         Assert.Contains("must contain an end node", error.ToString());
+    }
+
+    [Fact]
+    public async Task Render_OutputOutsideSourceDirectory_ReturnsFailure()
+    {
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("checkout.enzo", ValidSource);
+        var outputPath = System.IO.Path.Combine(workspace.Path, "..", $"{Guid.NewGuid():N}.svg");
+        var normalizedOutputPath = System.IO.Path.GetFullPath(outputPath);
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await CliApplication.RunAsync(["render", filePath, "--output", outputPath], output, error);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.False(File.Exists(normalizedOutputPath));
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("output path must be within", error.ToString());
     }
 
     private sealed class TestWorkspace : IDisposable

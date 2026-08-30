@@ -1,13 +1,30 @@
-﻿using Enzo.Diagrams.Language;
+﻿using System.Security;
+using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
 
 namespace Enzo.Diagrams.Cli;
 
 public static class Program
 {
-    public static Task<int> Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
-        return CliApplication.RunAsync(args, Console.Out, Console.Error);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            cancellationTokenSource.Cancel();
+        };
+
+        Console.CancelKeyPress += cancelHandler;
+
+        try
+        {
+            return await CliApplication.RunAsync(args, Console.Out, Console.Error, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancelHandler;
+        }
     }
 }
 
@@ -22,18 +39,28 @@ public static class CliApplication
         TextWriter error,
         CancellationToken cancellationToken = default)
     {
-        if (args.Length < 2)
+        try
         {
-            WriteUsage(error);
+            if (args.Length < 2)
+            {
+                WriteUsage(error);
+                return FailureExitCode;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return args[0] switch
+            {
+                "validate" => await ValidateAsync(args, output, error, cancellationToken),
+                "render" => await RenderAsync(args, output, error, cancellationToken),
+                _ => InvalidArguments(error)
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            error.WriteLine("Cancelled.");
             return FailureExitCode;
         }
-
-        return args[0] switch
-        {
-            "validate" => await ValidateAsync(args, output, error, cancellationToken),
-            "render" => await RenderAsync(args, output, error, cancellationToken),
-            _ => InvalidArguments(error)
-        };
     }
 
     private static async Task<int> ValidateAsync(
@@ -93,7 +120,7 @@ public static class CliApplication
         {
             await File.WriteAllTextAsync(outputPath, svg, cancellationToken);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception exception) when (IsFileAccessException(exception))
         {
             error.WriteLine($"Error: could not write '{outputPath}'. {exception.Message}");
             return FailureExitCode;
@@ -119,7 +146,7 @@ public static class CliApplication
             var source = await File.ReadAllTextAsync(filePath, cancellationToken);
             return FlowchartParser.Parse(source);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception exception) when (IsFileAccessException(exception))
         {
             error.WriteLine($"Error: could not read '{filePath}'. {exception.Message}");
             return null;
@@ -146,7 +173,55 @@ public static class CliApplication
             outputPath = args[++index];
         }
 
-        return true;
+        return TryNormalizeOutputPath(filePath, outputPath, out outputPath, error);
+    }
+
+    private static bool TryNormalizeOutputPath(
+        string sourceFilePath,
+        string outputPath,
+        out string normalizedOutputPath,
+        TextWriter error)
+    {
+        normalizedOutputPath = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            error.WriteLine("Error: output path is required.");
+            return false;
+        }
+
+        try
+        {
+            var fullOutputPath = Path.GetFullPath(outputPath);
+            var sourceDirectory = Path.GetDirectoryName(Path.GetFullPath(sourceFilePath));
+
+            if (string.IsNullOrEmpty(Path.GetFileName(fullOutputPath)))
+            {
+                error.WriteLine("Error: output path must include a file name.");
+                return false;
+            }
+
+            if (sourceDirectory is not null && !IsPathInDirectory(fullOutputPath, sourceDirectory))
+            {
+                error.WriteLine($"Error: output path must be within '{sourceDirectory}'.");
+                return false;
+            }
+
+            normalizedOutputPath = fullOutputPath;
+            return true;
+        }
+        catch (Exception exception) when (IsFileAccessException(exception))
+        {
+            error.WriteLine($"Error: invalid output path '{outputPath}'. {exception.Message}");
+            return false;
+        }
+    }
+
+    private static bool IsPathInDirectory(string path, string directory)
+    {
+        var directoryPrefix = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
+
+        return path.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void WriteParseErrors(
@@ -178,5 +253,10 @@ public static class CliApplication
         error.WriteLine("Usage:");
         error.WriteLine("  enzo-diagram validate <file>");
         error.WriteLine("  enzo-diagram render <file> [--output <file>]");
+    }
+
+    private static bool IsFileAccessException(Exception exception)
+    {
+        return exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or SecurityException;
     }
 }
