@@ -41,7 +41,12 @@ public static class BpmnSvgRenderer
             return;
         }
 
-        var midpoint = flow.Points[flow.Points.Count / 2];
+        var middleIndex = flow.Points.Count / 2;
+        var midpoint = flow.Points.Count % 2 == 0
+            ? new DiagramPoint(
+                (flow.Points[middleIndex - 1].X + flow.Points[middleIndex].X) / 2,
+                (flow.Points[middleIndex - 1].Y + flow.Points[middleIndex].Y) / 2)
+            : flow.Points[middleIndex];
         builder.AppendLine($"<text x=\"{Number(midpoint.X + 8)}\" y=\"{Number(midpoint.Y - 8)}\" fill=\"#111827\" font-family=\"Arial, sans-serif\" font-size=\"12\">{Escape(flow.Flow.Label)}</text>");
     }
 
