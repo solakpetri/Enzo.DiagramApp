@@ -60,7 +60,7 @@ public sealed class BpmnParser
         }
 
         var diagram = new BpmnDiagram(nameToken.Text, elements, flows, bpmnToken.Line, bpmnToken.Column);
-        return new BpmnParseResult(diagram, _errors, []);
+        return new BpmnParseResult(diagram, _errors, BpmnValidator.Validate(diagram));
     }
 
     private bool TryReadElement(List<BpmnElement> elements)
