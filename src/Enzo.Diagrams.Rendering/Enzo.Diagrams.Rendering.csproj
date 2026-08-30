@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Enzo.Diagrams.Core\Enzo.Diagrams.Core.csproj" />
+    <ProjectReference Include="..\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj" />
   </ItemGroup>
 
 </Project>
