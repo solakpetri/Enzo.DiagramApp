@@ -32,10 +32,10 @@ public sealed class FlowchartParserTests
         Assert.Equal(6, result.Flowchart.Nodes.Count);
         Assert.Equal(5, result.Flowchart.Edges.Count);
 
-        Assert.Equal(new FlowchartNode(FlowchartNodeKind.Start, "Begin", "Order received"), result.Flowchart.Nodes[0]);
-        Assert.Equal(new FlowchartNode(FlowchartNodeKind.Decision, "Available", "Stock available?"), result.Flowchart.Nodes[2]);
-        Assert.Equal(new FlowchartEdge("Available", "Reserve", "yes"), result.Flowchart.Edges[2]);
-        Assert.Equal(new FlowchartEdge("Reserve", "Complete", null), result.Flowchart.Edges[4]);
+        Assert.Equal(new FlowchartNode(FlowchartNodeKind.Start, "Begin", "Order received", 3, 7), result.Flowchart.Nodes[0]);
+        Assert.Equal(new FlowchartNode(FlowchartNodeKind.Decision, "Available", "Stock available?", 5, 10), result.Flowchart.Nodes[2]);
+        Assert.Equal(new FlowchartEdge("Available", "Reserve", "yes", 12, 1), result.Flowchart.Edges[2]);
+        Assert.Equal(new FlowchartEdge("Reserve", "Complete", null, 14, 1), result.Flowchart.Edges[4]);
     }
 
     [Fact]
@@ -73,5 +73,71 @@ public sealed class FlowchartParserTests
 
         Assert.False(result.IsSuccess);
         Assert.Contains(result.Errors, error => error.Line == 2 && error.Message.Contains("edge label"));
+    }
+
+    [Fact]
+    public void Parse_DuplicateNodeIdentifier_ReturnsValidationError()
+    {
+        var result = FlowchartParser.Parse("flow Checkout\nstart Begin \"Start\"\ntask Begin \"Duplicate\"\nend Complete \"Done\"");
+
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FlowchartValidationErrorKind.DuplicateNodeIdentifier, error.Kind);
+        Assert.Equal("Begin", error.NodeId);
+        Assert.Equal(3, error.Line);
+        Assert.Equal(6, error.Column);
+    }
+
+    [Fact]
+    public void Parse_UnknownEdgeSource_ReturnsValidationError()
+    {
+        var result = FlowchartParser.Parse("flow Checkout\nstart Begin \"Start\"\nend Complete \"Done\"\nBegn -> Complete");
+
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FlowchartValidationErrorKind.UnknownEdgeSource, error.Kind);
+        Assert.Equal("Begn", error.NodeId);
+        Assert.Equal("Begn", error.EdgeFromId);
+        Assert.Equal("Complete", error.EdgeToId);
+        Assert.Equal("Begin", error.Suggestion);
+        Assert.Contains("line 4", error.Message);
+    }
+
+    [Fact]
+    public void Parse_UnknownEdgeTarget_ReturnsValidationError()
+    {
+        var result = FlowchartParser.Parse("flow Checkout\nstart Begin \"Start\"\nend Complete \"Done\"\nBegin -> Payments");
+
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FlowchartValidationErrorKind.UnknownEdgeTarget, error.Kind);
+        Assert.Equal("Payments", error.NodeId);
+        Assert.Equal("Begin", error.EdgeFromId);
+        Assert.Equal("Payments", error.EdgeToId);
+        Assert.Equal(4, error.Line);
+    }
+
+    [Fact]
+    public void Parse_MissingStartNode_ReturnsValidationError()
+    {
+        var result = FlowchartParser.Parse("flow Checkout\ntask Validate \"Validate\"\nend Complete \"Done\"");
+
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FlowchartValidationErrorKind.MissingStartNode, error.Kind);
+        Assert.Equal(1, error.Line);
+        Assert.Equal(1, error.Column);
+    }
+
+    [Fact]
+    public void Parse_MissingEndNode_ReturnsValidationError()
+    {
+        var result = FlowchartParser.Parse("flow Checkout\nstart Begin \"Start\"\ntask Validate \"Validate\"");
+
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FlowchartValidationErrorKind.MissingEndNode, error.Kind);
+        Assert.Equal(1, error.Line);
+        Assert.Equal(1, error.Column);
     }
 }
