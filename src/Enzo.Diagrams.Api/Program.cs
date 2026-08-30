@@ -22,7 +22,7 @@ app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken ca
         return inputError;
     }
 
-    var result = FlowchartParser.Parse(source);
+    var result = DiagramParser.Parse(source);
     return result.IsSuccess
         ? Results.Ok(new ValidateDiagramResponse(true))
         : DiagramProblem(result);
@@ -58,14 +58,13 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
         ]);
     }
 
-    var result = FlowchartParser.Parse(source);
-    if (!result.IsSuccess || result.Flowchart is null)
+    var result = DiagramParser.Parse(source);
+    if (!result.IsSuccess)
     {
         return DiagramProblem(result);
     }
 
-    var layout = FlowchartLayoutEngine.Layout(result.Flowchart);
-    var svg = FlowchartSvgRenderer.Render(layout);
+    var svg = DiagramSvgRenderer.Render(result);
 
     if (string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase))
     {
@@ -138,7 +137,7 @@ static bool IsSupportedRenderFormat(string format)
         || string.Equals(format, "png", StringComparison.OrdinalIgnoreCase);
 }
 
-static IResult DiagramProblem(FlowchartParseResult result)
+static IResult DiagramProblem(DiagramParseResult result)
 {
     return Results.Problem(
         title: "Diagram DSL is invalid.",
@@ -162,7 +161,7 @@ static IResult InvalidRequestProblem(string detail, IReadOnlyList<DiagramProblem
         });
 }
 
-static IReadOnlyList<DiagramProblemError> ToDiagramErrors(FlowchartParseResult result)
+static IReadOnlyList<DiagramProblemError> ToDiagramErrors(DiagramParseResult result)
 {
     var errors = new List<DiagramProblemError>();
 
@@ -170,7 +169,7 @@ static IReadOnlyList<DiagramProblemError> ToDiagramErrors(FlowchartParseResult r
         new DiagramProblemError("syntax", error.Line, error.Column, error.Message)));
 
     errors.AddRange(result.ValidationErrors.Select(error =>
-        new DiagramProblemError("validation", error.Line, error.Column, error.Message, error.Kind.ToString())));
+        new DiagramProblemError("validation", error.Line, error.Column, error.Message, error.Kind)));
 
     return errors;
 }
