@@ -54,11 +54,15 @@ public sealed class FlowchartParser
             SynchronizeLine();
         }
 
-        var flowchart = _errors.Count == 0 && flowToken is not null && nameToken is not null
-            ? new Flowchart(nameToken.Text, nodes, edges)
-            : null;
+        if (_errors.Count > 0 || flowToken is null || nameToken is null)
+        {
+            return new FlowchartParseResult(null, _errors, []);
+        }
 
-        return new FlowchartParseResult(flowchart, _errors);
+        var flowchart = new Flowchart(nameToken.Text, nodes, edges, flowToken.Line, flowToken.Column);
+        var validationErrors = FlowchartValidator.Validate(flowchart);
+
+        return new FlowchartParseResult(flowchart, _errors, validationErrors);
     }
 
     private bool TryReadNode(List<FlowchartNode> nodes)
@@ -86,7 +90,7 @@ public sealed class FlowchartParser
 
         if (_errors.Count == errorCount && idToken is not null && labelToken is not null)
         {
-            nodes.Add(new FlowchartNode(kind.Value, idToken.Text, labelToken.Text));
+            nodes.Add(new FlowchartNode(kind.Value, idToken.Text, labelToken.Text, idToken.Line, idToken.Column));
         }
 
         return true;
@@ -117,7 +121,7 @@ public sealed class FlowchartParser
 
         if (_errors.Count == errorCount && fromToken is not null && toToken is not null)
         {
-            edges.Add(new FlowchartEdge(fromToken.Text, toToken.Text, label));
+            edges.Add(new FlowchartEdge(fromToken.Text, toToken.Text, label, fromToken.Line, fromToken.Column));
         }
     }
 
