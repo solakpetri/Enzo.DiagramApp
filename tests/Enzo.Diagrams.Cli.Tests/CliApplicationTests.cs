@@ -16,6 +16,17 @@ public sealed class CliApplicationTests
         Validate -> Complete
         """;
 
+    private const string ValidSequenceSource = """
+        sequence Checkout
+        actor Customer
+        participant API
+        participant Payment
+        Customer -> API: Checkout
+        API -> Payment: Charge
+        Payment --> API: Success
+        API --> Customer: Confirmed
+        """;
+
     [Fact]
     public async Task Validate_ValidDsl_ReturnsSuccess()
     {
@@ -98,6 +109,23 @@ public sealed class CliApplicationTests
         Assert.True(File.Exists(outputPath));
         Assert.False(File.Exists(defaultOutputPath));
         Assert.Contains("Validate order", await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Render_SequenceDsl_WritesSvg()
+    {
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("checkout.enzo", ValidSequenceSource);
+        var outputPath = Path.Combine(workspace.Path, "checkout.svg");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await CliApplication.RunAsync(["render", filePath], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(outputPath));
+        Assert.Contains("Confirmed", await File.ReadAllTextAsync(outputPath));
         Assert.Equal(string.Empty, error.ToString());
     }
 

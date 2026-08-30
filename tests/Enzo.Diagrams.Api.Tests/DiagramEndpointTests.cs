@@ -20,6 +20,17 @@ public sealed class DiagramEndpointTests
         Validate -> Complete
         """;
 
+    private const string ValidSequenceSource = """
+        sequence Checkout
+        actor Customer
+        participant API
+        participant Payment
+        Customer -> API: Checkout
+        API -> Payment: Charge
+        Payment --> API: Success
+        API --> Customer: Confirmed
+        """;
+
     [Fact]
     public async Task Validate_ValidSource_ReturnsSuccess()
     {
@@ -74,6 +85,25 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task Render_ValidSequence_ReturnsSvg()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSequenceSource,
+            format = "svg"
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+        var svg = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Customer", svg);
+        Assert.Contains("Confirmed", svg);
+    }
+
+    [Fact]
     public async Task Render_PngFormat_ReturnsPng()
     {
         await using var factory = new WebApplicationFactory<global::Program>();
@@ -89,6 +119,24 @@ public sealed class DiagramEndpointTests
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
         var png = await response.Content.ReadAsByteArrayAsync();
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
+    public async Task Validate_SequenceWithUnknownParticipant_ReturnsProblemDetails()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new
+        {
+            source = "sequence Checkout\nactor Customer\nCustomer -> API: Checkout"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "UnknownMessageTarget");
     }
 
     [Fact]
