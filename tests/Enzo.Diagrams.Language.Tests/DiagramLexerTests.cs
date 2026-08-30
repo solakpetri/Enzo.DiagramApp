@@ -33,5 +33,34 @@ public sealed class DiagramLexerTests
         var error = Assert.Single(result.Errors);
         Assert.Equal(2, error.Line);
         Assert.Contains("Unterminated", error.Message);
+
+        var token = Assert.Single(result.Tokens, token => token.Kind == TokenKind.String);
+        Assert.Equal("Validate order", token.Text);
+    }
+
+    [Fact]
+    public void Tokenize_UnterminatedStringBeforeNewLine_EmitsPartialStringAndContinues()
+    {
+        var result = DiagramLexer.Tokenize("flow Checkout\ntask Validate \"Validate order\nend Complete \"Done\"");
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(2, error.Line);
+        Assert.Contains("Unterminated", error.Message);
+
+        Assert.Equal(
+            [
+                TokenKind.Flow,
+                TokenKind.Identifier,
+                TokenKind.EndOfLine,
+                TokenKind.Task,
+                TokenKind.Identifier,
+                TokenKind.String,
+                TokenKind.EndOfLine,
+                TokenKind.End,
+                TokenKind.Identifier,
+                TokenKind.String,
+                TokenKind.EndOfFile
+            ],
+            result.Tokens.Select(token => token.Kind).ToArray());
     }
 }

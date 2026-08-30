@@ -112,6 +112,8 @@ public sealed class DiagramLexer
 
         if (IsAtEnd || Current is '\r' or '\n')
         {
+            var partialText = _source[start.._index];
+            _tokens.Add(new SyntaxToken(TokenKind.String, partialText, line, column));
             _errors.Add(new DiagramSyntaxError(line, column, "Unterminated string literal."));
             return;
         }
