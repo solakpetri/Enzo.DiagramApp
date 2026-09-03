@@ -109,7 +109,31 @@ Unsupported BPMN features include pools, lanes, message events, timer events, su
 
 ## Installation
 
-Enzo.Diagrams is currently installed from source. The solution targets .NET `net10.0`, so the .NET 10 SDK is required.
+The CLI is packaged as a .NET tool. The solution targets .NET `net10.0`, so the .NET 10 SDK is required to build or install local packages.
+
+When `Enzo.Diagrams.Cli` is available from your configured NuGet source, install it globally:
+
+```powershell
+dotnet tool install --global Enzo.Diagrams.Cli
+```
+
+The installed command is `enzo-diagram`:
+
+```powershell
+enzo-diagram validate diagram.enzo
+enzo-diagram render diagram.enzo
+enzo-diagram render diagram.enzo --format png
+```
+
+Build and install a local package into an isolated tool path:
+
+```powershell
+dotnet pack src/Enzo.Diagrams.Cli -c Release
+dotnet tool install Enzo.Diagrams.Cli --version 0.1.0 --tool-path ./.tools --add-source src/Enzo.Diagrams.Cli/bin/Release
+./.tools/enzo-diagram validate examples/checkout.enzo
+```
+
+To run from source:
 
 ```powershell
 git clone https://github.com/solakpetri/Enzo.DiagramApp.git
@@ -286,7 +310,7 @@ Contributions should keep the DSL small, validate input before rendering, and av
 ## Limitations
 
 - No interactive frontend.
-- No packaged SDK, NuGet package, Docker image, or hosted service.
+- No packaged SDK, Docker image, or hosted service.
 - No packaged ChatGPT/custom GPT integration.
 - No comment syntax in the DSL.
 - No escaped quotes or multiline string labels.
