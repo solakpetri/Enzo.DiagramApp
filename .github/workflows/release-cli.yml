@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -46,5 +47,11 @@ jobs:
       - name: Pack CLI tool
         run: dotnet pack src/Enzo.Diagrams.Cli/Enzo.Diagrams.Cli.csproj --configuration Release --no-build --output "$RUNNER_TEMP/packages" -p:PackageVersion=${{ steps.version.outputs.package_version }} -p:Version=${{ steps.version.outputs.package_version }}
 
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Publish CLI tool to NuGet.org
-        run: dotnet nuget push "$RUNNER_TEMP/packages/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ secrets.NUGET_API_KEY }}" --skip-duplicate
+        run: dotnet nuget push "$RUNNER_TEMP/packages/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
