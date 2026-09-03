@@ -18,6 +18,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 USER app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "Enzo.Diagrams.Api.dll"]

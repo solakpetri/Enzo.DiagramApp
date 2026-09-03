@@ -42,7 +42,7 @@ public static class FlowchartSvgRenderer
         }
 
         var midpoint = connection.Points[connection.Points.Count / 2];
-        builder.AppendLine($"<text x=\"{Number(midpoint.X + 8)}\" y=\"{Number(midpoint.Y - 8)}\" fill=\"#334155\" font-family=\"Arial, sans-serif\" font-size=\"12\">{Escape(connection.Edge.Label)}</text>");
+        builder.AppendLine($"<text x=\"{Number(midpoint.X + 8)}\" y=\"{Number(midpoint.Y - 8)}\" fill=\"#334155\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"12\">{Escape(connection.Edge.Label)}</text>");
     }
 
     private static void RenderNode(StringBuilder builder, PositionedFlowchartNode node)
@@ -69,7 +69,7 @@ public static class FlowchartSvgRenderer
             builder.AppendLine($"<rect x=\"{Number(node.X)}\" y=\"{Number(node.Y)}\" width=\"{Number(node.Size.Width)}\" height=\"{Number(node.Size.Height)}\" rx=\"{radius}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"2\" />");
         }
 
-        builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(centerY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"#0f172a\" font-family=\"Arial, sans-serif\" font-size=\"14\">{Escape(node.Node.Label)}</text>");
+        builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(centerY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"#0f172a\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"14\">{Escape(node.Node.Label)}</text>");
     }
 
     private static string Number(double value)

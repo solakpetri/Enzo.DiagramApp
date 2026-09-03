@@ -47,7 +47,7 @@ public static class BpmnSvgRenderer
                 (flow.Points[middleIndex - 1].X + flow.Points[middleIndex].X) / 2,
                 (flow.Points[middleIndex - 1].Y + flow.Points[middleIndex].Y) / 2)
             : flow.Points[middleIndex];
-        builder.AppendLine($"<text x=\"{Number(midpoint.X + 8)}\" y=\"{Number(midpoint.Y - 8)}\" fill=\"#111827\" font-family=\"Arial, sans-serif\" font-size=\"12\">{Escape(flow.Flow.Label)}</text>");
+        builder.AppendLine($"<text x=\"{Number(midpoint.X + 8)}\" y=\"{Number(midpoint.Y - 8)}\" fill=\"#111827\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"12\">{Escape(flow.Flow.Label)}</text>");
     }
 
     private static void RenderElement(StringBuilder builder, PositionedBpmnElement element)
@@ -70,7 +70,7 @@ public static class BpmnSvgRenderer
                 break;
             default:
                 builder.AppendLine($"<rect x=\"{Number(element.X)}\" y=\"{Number(element.Y)}\" width=\"{Number(element.Size.Width)}\" height=\"{Number(element.Size.Height)}\" rx=\"10\" fill=\"#ffffff\" stroke=\"#111827\" stroke-width=\"2\" />");
-                builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(centerY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"#111827\" font-family=\"Arial, sans-serif\" font-size=\"14\">{Escape(element.Element.Label)}</text>");
+                builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(centerY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"#111827\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"14\">{Escape(element.Element.Label)}</text>");
                 break;
         }
     }
@@ -89,7 +89,7 @@ public static class BpmnSvgRenderer
 
     private static void RenderExternalLabel(StringBuilder builder, PositionedBpmnElement element, double centerX)
     {
-        builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(element.Y + element.Size.Height + 18)}\" text-anchor=\"middle\" fill=\"#111827\" font-family=\"Arial, sans-serif\" font-size=\"12\">{Escape(element.Element.Label)}</text>");
+        builder.AppendLine($"<text x=\"{Number(centerX)}\" y=\"{Number(element.Y + element.Size.Height + 18)}\" text-anchor=\"middle\" fill=\"#111827\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"12\">{Escape(element.Element.Label)}</text>");
     }
 
     private static string Number(double value)
