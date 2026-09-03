@@ -250,6 +250,8 @@ The supported integration model is prompt-based DSL generation plus CLI/API rend
 
 No packaged ChatGPT integration is currently configured in this repository. A packaged integration could be added later, but the core application does not depend on a specific AI provider.
 
+See [docs/ai-integration.md](docs/ai-integration.md) for the agent-facing API contract, integration algorithm, DSL examples, and current limitations.
+
 ## AI agent instructions
 
 When generating diagrams for Enzo.Diagrams:

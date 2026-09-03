@@ -3,11 +3,15 @@ using System.Text.Json;
 using Enzo.Diagrams.Api;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi("v1");
 
 var app = builder.Build();
+
+app.MapOpenApi();
 
 app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken cancellationToken) =>
 {
@@ -27,6 +31,10 @@ app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken ca
         ? Results.Ok(new ValidateDiagramResponse(true))
         : DiagramProblem(result);
 })
+.WithName("ValidateDiagram")
+.WithTags("Diagrams")
+.WithSummary("Validate Enzo.Diagrams DSL.")
+.WithDescription("Parses and validates the source DSL without rendering. Syntax errors, validation errors, malformed JSON, and missing source values return ProblemDetails with an errors extension.")
 .Accepts<ValidateDiagramRequest>("application/json")
 .Produces<ValidateDiagramResponse>()
 .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -82,9 +90,42 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
 
     return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
 })
+.WithName("RenderDiagram")
+.WithTags("Diagrams")
+.WithSummary("Render Enzo.Diagrams DSL.")
+.WithDescription("Parses, validates, lays out, and renders the source DSL as SVG or PNG. The format field supports svg and png. Syntax errors, validation errors, malformed JSON, missing source or format values, unsupported formats, and PNG rasterization failures return ProblemDetails with an errors extension.")
 .Accepts<RenderDiagramRequest>("application/json")
-.Produces(StatusCodes.Status200OK, contentType: "image/svg+xml")
-.Produces(StatusCodes.Status200OK, contentType: "image/png")
+.Produces(StatusCodes.Status200OK)
+.AddOpenApiOperationTransformer((operation, _, _) =>
+{
+    if (operation.Responses is null || !operation.Responses.TryGetValue("200", out var response))
+    {
+        return Task.CompletedTask;
+    }
+
+    var content = response.Content ?? throw new InvalidOperationException("Generated OpenAPI response content is unavailable.");
+
+    response.Description = "Rendered SVG or PNG diagram.";
+    content.TryAdd("image/svg+xml", new OpenApiMediaType
+    {
+        Schema = new OpenApiSchema
+        {
+            Type = JsonSchemaType.String,
+            Description = "SVG document."
+        }
+    });
+    content.TryAdd("image/png", new OpenApiMediaType
+    {
+        Schema = new OpenApiSchema
+        {
+            Type = JsonSchemaType.String,
+            Format = "binary",
+            Description = "PNG image bytes."
+        }
+    });
+
+    return Task.CompletedTask;
+})
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.Run();
