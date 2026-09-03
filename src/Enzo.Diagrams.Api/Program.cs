@@ -106,16 +106,15 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
     var content = response.Content ?? throw new InvalidOperationException("Generated OpenAPI response content is unavailable.");
 
     response.Description = "Rendered SVG or PNG diagram.";
-    content.Clear();
-    content["image/svg+xml"] = new OpenApiMediaType
+    content.TryAdd("image/svg+xml", new OpenApiMediaType
     {
         Schema = new OpenApiSchema
         {
             Type = JsonSchemaType.String,
             Description = "SVG document."
         }
-    };
-    content["image/png"] = new OpenApiMediaType
+    });
+    content.TryAdd("image/png", new OpenApiMediaType
     {
         Schema = new OpenApiSchema
         {
@@ -123,7 +122,7 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
             Format = "binary",
             Description = "PNG image bytes."
         }
-    };
+    });
 
     return Task.CompletedTask;
 })
