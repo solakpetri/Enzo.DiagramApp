@@ -244,6 +244,22 @@ Endpoints:
 - `POST /v1/render` accepts `{ "source": "...", "format": "svg" }` or `{ "source": "...", "format": "png" }` and returns `image/svg+xml` or `image/png`.
 - Invalid requests return `application/problem+json` with an `errors` extension.
 
+## Docker
+
+Build the API image from the repository root:
+
+```powershell
+docker build -f src/Enzo.Diagrams.Api/Dockerfile -t enzo-diagrams-api .
+```
+
+Run the API at `http://localhost:5085`:
+
+```powershell
+docker run --rm -p 5085:8080 enzo-diagrams-api
+```
+
+The container listens on HTTP port `8080`.
+
 ## AI / ChatGPT integration
 
 The supported integration model is prompt-based DSL generation plus CLI/API rendering. A ChatGPT conversation, custom GPT, coding agent, or automation script can generate Enzo.Diagrams DSL and send it to Enzo.Diagrams for validation and rendering.
@@ -312,7 +328,7 @@ Contributions should keep the DSL small, validate input before rendering, and av
 ## Limitations
 
 - No interactive frontend.
-- No packaged SDK, Docker image, or hosted service.
+- No packaged SDK or hosted service.
 - No packaged ChatGPT/custom GPT integration.
 - No comment syntax in the DSL.
 - No escaped quotes or multiline string labels.
