@@ -11,7 +11,8 @@ public sealed record SequenceParticipant(
     SequenceParticipantKind Kind,
     string Id,
     int Line = 0,
-    int Column = 0);
+    int Column = 0,
+    string? DisplayName = null);
 
 public sealed record SequenceMessage(
     string FromId,

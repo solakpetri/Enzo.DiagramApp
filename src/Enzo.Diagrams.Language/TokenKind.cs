@@ -12,6 +12,7 @@ public enum TokenKind
     Participant,
     Identifier,
     String,
+    LineText,
     Arrow,
     DashedArrow,
     Colon,
