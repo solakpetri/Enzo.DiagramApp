@@ -1,10 +1,12 @@
 # Enzo.Diagrams
 
-Enzo.Diagrams is a diagram-as-code engine for humans and AI agents. It defines a small DSL for flowcharts, sequence diagrams, and a BPMN-inspired subset, then renders diagrams as SVG or PNG through a CLI or HTTP API.
+Enzo.Diagrams is a headless diagram-as-code engine designed for humans and AI agents. AI can generate a compact Enzo.Diagrams DSL; the engine parses, validates, lays out, and renders it as SVG or PNG through a CLI or HTTP API.
 
 ## Overview
 
-The repository contains a headless .NET solution. Users write Enzo.Diagrams DSL directly, or ask an AI agent to produce the DSL, then pass it to the parser, validator, layout engine, and renderer.
+The repository contains a .NET solution with a custom DSL, lexer/parser, semantic validation, deterministic layout, SVG rendering, PNG conversion, a command-line tool, and a minimal HTTP API.
+
+Users can write DSL directly, or ask an AI agent to produce it, then pass the DSL to Enzo.Diagrams for validation and rendering.
 
 The project currently has no interactive frontend, database, packaged SDK, or packaged ChatGPT plugin.
 
@@ -34,11 +36,11 @@ Enzo.Diagrams DSL
  optional PNG
 ```
 
-Core boundary: AI does not render the diagram.
+Architectural boundary: AI generates the DSL. Enzo.Diagrams renders the diagram.
 
 AI generates valid Enzo.Diagrams DSL. Enzo.Diagrams parses, validates, lays out, and renders it. The application is AI-provider-independent; any AI agent can use it if it understands the DSL and can call the CLI or HTTP API.
 
-## Supported diagram types
+## Supported diagrams
 
 Supported top-level declarations are:
 
@@ -47,6 +49,24 @@ Supported top-level declarations are:
 - `bpmn` for a small BPMN-inspired subset
 
 Identifiers must start with an ASCII letter or `_`, followed by ASCII letters, digits, or `_`. Keywords are lowercase and case-sensitive. Quoted labels use double quotes and cannot span multiple lines.
+
+## Quick start
+
+When `Enzo.Diagrams.Cli` is available from your configured NuGet source, install it globally:
+
+```bash
+dotnet tool install --global Enzo.Diagrams.Cli
+```
+
+Validate and render an included example:
+
+```bash
+enzo-diagram validate examples/flowchart/order-fulfillment.enzo
+enzo-diagram render examples/flowchart/order-fulfillment.enzo
+enzo-diagram render examples/flowchart/order-fulfillment.enzo --format png
+```
+
+The CLI command is `enzo-diagram`. `render` defaults to SVG and writes next to the source file unless `--output <file>` is provided.
 
 ## Flowchart DSL
 
@@ -71,24 +91,24 @@ Reserve -> Complete
 
 ## Sequence diagram DSL
 
-Sequence diagrams support `actor` and `participant` declarations. Messages use `->` for synchronous messages and `-->` for responses. Every message requires a label after `:`.
+Sequence diagrams support `actor` and `participant` declarations, with optional quoted display names. Messages use `->` for synchronous messages and `-->` for responses. Every message requires a label after `:`.
 
 ```text
-sequence Checkout
+sequence OrderPayment
 
-actor Customer
-participant API
-participant Payment
+actor Customer "Customer"
+participant Storefront "Storefront"
+participant Payments "Payment Service"
 
-Customer -> API: Checkout
-API -> Payment: Charge
-Payment --> API: Success
-API --> Customer: Confirmed
+Customer -> Storefront: Create order
+Storefront -> Payments: POST /payments
+Payments --> Storefront: 200 OK
+Storefront --> Customer: Order paid
 ```
 
 ## BPMN subset
 
-The BPMN-inspired subset is not BPMN 2.0 compliant. It supports start events, end events, tasks, exclusive gateways, sequence flows, and optional sequence-flow labels.
+The BPMN-inspired subset is not BPMN 2.0 compliant. It supports start events, end events, tasks, exclusive gateways, sequence flows, and optional sequence-flow labels. Start and end events use their identifiers as labels.
 
 ```text
 bpmn Order
@@ -98,10 +118,12 @@ task Validate "Validate order"
 gateway Available "Stock available?"
 task Reserve "Reserve stock"
 end Complete
+end Rejected
 
 Received -> Validate
 Validate -> Available
 Available -> Reserve : yes
+Available -> Rejected : no
 Reserve -> Complete
 ```
 
@@ -111,31 +133,23 @@ Unsupported BPMN features include pools, lanes, message events, timer events, su
 
 The CLI is packaged as a .NET tool. The solution targets .NET `net10.0`, so the .NET 10 SDK is required to build or install local packages.
 
-When `Enzo.Diagrams.Cli` is available from your configured NuGet source, install it globally:
+Global installation uses the configured NuGet sources:
 
-```powershell
+```bash
 dotnet tool install --global Enzo.Diagrams.Cli
-```
-
-The installed command is `enzo-diagram`:
-
-```powershell
-enzo-diagram validate diagram.enzo
-enzo-diagram render diagram.enzo
-enzo-diagram render diagram.enzo --format png
 ```
 
 Build and install a local package into an isolated tool path:
 
-```powershell
+```bash
 dotnet pack src/Enzo.Diagrams.Cli -c Release
 dotnet tool install Enzo.Diagrams.Cli --version 0.1.0 --tool-path ./.tools --add-source src/Enzo.Diagrams.Cli/bin/Release
-./.tools/enzo-diagram validate examples/checkout.enzo
+./.tools/enzo-diagram validate examples/flowchart/order-fulfillment.enzo
 ```
 
 To run from source:
 
-```powershell
+```bash
 git clone https://github.com/solakpetri/Enzo.DiagramApp.git
 cd Enzo.DiagramApp
 dotnet restore
@@ -145,37 +159,32 @@ dotnet restore
 
 Run CLI commands from the repository root:
 
-```powershell
-dotnet run --project src/Enzo.Diagrams.Cli -- validate examples/checkout.enzo
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format svg
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format png
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --output examples/checkout-custom.svg
+```bash
+dotnet run --project src/Enzo.Diagrams.Cli -- validate examples/flowchart/order-fulfillment.enzo
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format svg
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format png
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --output examples/flowchart/order-fulfillment-custom.svg
 ```
 
 If `--output` is omitted, the CLI writes next to the source file with the selected format extension. Custom output paths must include a file name and stay inside the source file directory.
 
-## Validation
+## Examples directory
 
-Create a diagram file manually:
-
-```powershell
-New-Item -ItemType Directory -Force -Path examples
-@'
-flow Checkout
-
-start Begin "Order received"
-task Validate "Validate order"
-end Complete "Complete order"
-
-Begin -> Validate
-Validate -> Complete
-'@ | Set-Content -Encoding UTF8 examples/checkout.enzo
+```text
+examples/
+  flowchart/order-fulfillment.enzo
+  sequence/order-payment.enzo
+  bpmn/order-approval.enzo
 ```
+
+The examples are source DSL files only. Generated SVG and PNG files are intentionally not committed.
+
+## Validation
 
 Validate it:
 
-```powershell
-dotnet run --project src/Enzo.Diagrams.Cli -- validate examples/checkout.enzo
+```bash
+dotnet run --project src/Enzo.Diagrams.Cli -- validate examples/flowchart/order-fulfillment.enzo
 ```
 
 A valid file prints `Valid: <file>`. Invalid files return a non-zero exit code and print syntax or validation errors with line and column information.
@@ -190,52 +199,57 @@ Rendering parses and validates first. Invalid diagrams are not rendered.
 
 Render SVG to the default output path:
 
-```powershell
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format svg
+```bash
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format svg
 ```
 
 Choose an SVG output path:
 
-```powershell
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format svg --output examples/checkout-public.svg
+```bash
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format svg --output examples/flowchart/order-fulfillment-public.svg
 ```
 
 ## PNG output
 
 PNG output is produced by rasterizing the generated SVG with Svg.Skia/SkiaSharp.
 
-```powershell
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format png
-dotnet run --project src/Enzo.Diagrams.Cli -- render examples/checkout.enzo --format png --output examples/checkout-public.png
+```bash
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format png
+dotnet run --project src/Enzo.Diagrams.Cli -- render examples/flowchart/order-fulfillment.enzo --format png --output examples/flowchart/order-fulfillment-public.png
 ```
 
 ## HTTP API
 
 Start the API:
 
-```powershell
+```bash
 dotnet run --project src/Enzo.Diagrams.Api --urls http://localhost:5085
-```
-
-Call the validation API from another terminal:
-
-```powershell
-[string]$source = Get-Content examples/checkout.enzo -Raw
-Invoke-RestMethod -Uri http://localhost:5085/v1/validate -Method Post -ContentType 'application/json' -Body (@{ source = $source } | ConvertTo-Json)
 ```
 
 Render SVG through the API:
 
-```powershell
-[string]$source = Get-Content examples/checkout.enzo -Raw
-Invoke-WebRequest -UseBasicParsing -Uri http://localhost:5085/v1/render -Method Post -ContentType 'application/json' -Body (@{ source = $source; format = 'svg' } | ConvertTo-Json) -OutFile examples/checkout-api.svg
+```bash
+curl -s http://localhost:5085/v1/render \
+  -H "Content-Type: application/json" \
+  -d '{"source":"sequence Order\nactor Customer\nparticipant Storefront\nCustomer -> Storefront: Create order","format":"svg"}' \
+  -o order.svg
 ```
 
-Render PNG through the API:
+Validation request shape:
 
-```powershell
-[string]$source = Get-Content examples/checkout.enzo -Raw
-Invoke-WebRequest -UseBasicParsing -Uri http://localhost:5085/v1/render -Method Post -ContentType 'application/json' -Body (@{ source = $source; format = 'png' } | ConvertTo-Json) -OutFile examples/checkout-api.png
+```json
+{
+  "source": "flow Checkout\nstart Begin \"Order received\"\nend Complete \"Complete order\"\nBegin -> Complete"
+}
+```
+
+Render request shape:
+
+```json
+{
+  "source": "flow Checkout\nstart Begin \"Order received\"\nend Complete \"Complete order\"\nBegin -> Complete",
+  "format": "svg"
+}
 ```
 
 Endpoints:
@@ -244,27 +258,61 @@ Endpoints:
 - `POST /v1/render` accepts `{ "source": "...", "format": "svg" }` or `{ "source": "...", "format": "png" }` and returns `image/svg+xml` or `image/png`.
 - Invalid requests return `application/problem+json` with an `errors` extension.
 
-## Docker
+## Docker usage
 
 Build the API image from the repository root:
 
-```powershell
+```bash
 docker build -f src/Enzo.Diagrams.Api/Dockerfile -t enzo-diagrams-api .
 ```
 
 Run the API at `http://localhost:5085`:
 
-```powershell
+```bash
 docker run --rm -p 5085:8080 enzo-diagrams-api
 ```
 
 The container listens on HTTP port `8080`.
 
-## AI / ChatGPT integration
+## AI integration
 
 The supported integration model is prompt-based DSL generation plus CLI/API rendering. A ChatGPT conversation, custom GPT, coding agent, or automation script can generate Enzo.Diagrams DSL and send it to Enzo.Diagrams for validation and rendering.
 
-No packaged ChatGPT integration is currently configured in this repository. A packaged integration could be added later, but the core application does not depend on a specific AI provider.
+No packaged ChatGPT integration is currently configured in this repository. Enzo.Diagrams itself does not call ChatGPT or any LLM, and the core application does not depend on a specific AI provider.
+
+Example AI-assisted rendering flow:
+
+```text
+User:
+"Create a sequence diagram showing an order being created and paid."
+
+              ↓
+
+AI generates:
+
+sequence OrderPayment
+actor Customer "Customer"
+participant Storefront "Storefront"
+participant Payments "Payment Service"
+Customer -> Storefront: Create order
+Storefront -> Payments: POST /payments
+Payments --> Storefront: 200 OK
+Storefront --> Customer: Order paid
+
+              ↓
+
+POST /v1/render
+
+              ↓
+
+Enzo.Diagrams
+
+              ↓
+
+order.svg
+```
+
+An AI client can use parser and validation errors returned by `POST /v1/validate` or `POST /v1/render` to repair invalid DSL and retry.
 
 See [docs/ai-integration.md](docs/ai-integration.md) for the agent-facing API contract, integration algorithm, DSL examples, and current limitations.
 
@@ -280,23 +328,23 @@ When generating diagrams for Enzo.Diagrams:
 - For `bpmn`, declare `start <Id>`, `task <Id> "Label"`, `gateway <Id> "Label"`, or `end <Id>`, then sequence flows as `<From> -> <To>` and optional `: label`.
 - Send the DSL to Enzo.Diagrams through the CLI or HTTP API for validation and rendering.
 
-## Development setup
+## Development
 
-```powershell
+```bash
 dotnet restore
 ```
 
 Use the CLI and API startup commands above for local development.
 
-## Build instructions
+## Build
 
-```powershell
+```bash
 dotnet build
 ```
 
-## Test instructions
+## Tests
 
-```powershell
+```bash
 dotnet test
 ```
 
@@ -310,7 +358,7 @@ Maintainers must configure `NUGET_API_KEY` as a GitHub Actions repository secret
 
 Basic release steps:
 
-```powershell
+```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
@@ -320,6 +368,9 @@ git push origin v0.1.0
 ```text
 .github/workflows/code-review.yml        Pull-request code review workflow
 .github/workflows/release-cli.yml        Tagged CLI release workflow
+examples/flowchart/                      Flowchart DSL examples
+examples/sequence/                       Sequence diagram DSL examples
+examples/bpmn/                           BPMN subset DSL examples
 src/Enzo.Diagrams.Api/                  Minimal HTTP API
 src/Enzo.Diagrams.Cli/                  Command-line entry point
 src/Enzo.Diagrams.Core/                 Core project currently present in the solution
@@ -356,11 +407,11 @@ Contributions should keep the DSL small, validate input before rendering, and av
 Potential future work:
 
 - Broader BPMN coverage.
-- Packaged CLI releases.
+- Published package availability and versioned documentation.
 - A documented AI action/plugin wrapper around the HTTP API.
 - More layout controls.
 - DSL comments and richer label handling.
 
-## License
+## License status
 
 No license file is currently present in this repository. Until a license is added, do not assume open-source usage rights beyond viewing the public repository.
