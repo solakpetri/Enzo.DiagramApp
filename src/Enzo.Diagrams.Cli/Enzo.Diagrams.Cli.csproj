@@ -9,6 +9,15 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>enzo-diagram</AssemblyName>
     <RootNamespace>Enzo.Diagrams.Cli</RootNamespace>
+    <PackageId>Enzo.Diagrams.Cli</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>solakpetri</Authors>
+    <Description>Command-line tool for validating and rendering Enzo.Diagrams DSL files.</Description>
+    <PackageTags>diagram;diagrams;dsl;cli;svg;png</PackageTags>
+    <RepositoryUrl>https://github.com/solakpetri/Enzo.DiagramApp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>enzo-diagram</ToolCommandName>
   </PropertyGroup>
 
 </Project>
