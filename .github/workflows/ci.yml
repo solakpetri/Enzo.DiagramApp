@@ -34,10 +34,17 @@ jobs:
       - name: Install and run packaged CLI tool
         shell: bash
         run: |
-          dotnet new nugetconfig --output "$RUNNER_TEMP/nuget"
-          dotnet nuget remove source nuget.org --configfile "$RUNNER_TEMP/nuget/nuget.config"
-          dotnet nuget add source "$RUNNER_TEMP/packages" --name local-enzo --configfile "$RUNNER_TEMP/nuget/nuget.config"
-          dotnet tool install Enzo.Diagrams.Cli --version 0.1.0 --tool-path "$RUNNER_TEMP/tool" --configfile "$RUNNER_TEMP/nuget/nuget.config"
+          cat > "$RUNNER_TEMP/nuget.config" <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="local-enzo" value="$RUNNER_TEMP/packages" />
+            </packageSources>
+          </configuration>
+          EOF
+
+          dotnet tool install Enzo.Diagrams.Cli --version 0.1.0 --tool-path "$RUNNER_TEMP/tool" --configfile "$RUNNER_TEMP/nuget.config"
 
           diagram="$RUNNER_TEMP/diagram.enzo"
           cat > "$diagram" <<'EOF'
