@@ -1,0 +1,10 @@
+sequence OrderPayment
+
+actor Customer "Customer"
+participant Storefront "Storefront"
+participant Payments "Payment Service"
+
+Customer -> Storefront: Create order
+Storefront -> Payments: POST /payments
+Payments --> Storefront: 200 OK
+Storefront --> Customer: Order paid

@@ -1,0 +1,14 @@
+flow OrderFulfillment
+
+start Created "Order created"
+task Validate "Validate order"
+decision Paid "Payment captured?"
+task Pack "Pack shipment"
+end Shipped "Order shipped"
+end Cancelled "Cancel order"
+
+Created -> Validate
+Validate -> Paid
+Paid -> Pack : yes
+Paid -> Cancelled : no
+Pack -> Shipped
