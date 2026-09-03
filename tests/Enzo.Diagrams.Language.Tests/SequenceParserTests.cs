@@ -65,6 +65,25 @@ public sealed class SequenceParserTests
     }
 
     [Fact]
+    public void Parse_TechnicalMessageLabel_TrimsTrailingWhitespace()
+    {
+        var result = SequenceParser.Parse("sequence Checkout\nparticipant Api\nparticipant Db\nApi -> Db: POST /orders  \t");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.SequenceDiagram);
+        Assert.Equal("POST /orders", result.SequenceDiagram.Messages[0].Label);
+    }
+
+    [Fact]
+    public void Parse_UnquotedParticipantDisplayName_ReturnsStructuralSyntaxError()
+    {
+        var result = SequenceParser.Parse("sequence Checkout\nparticipant Api Order API");
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.Errors, error => error.Line == 2 && error.Message.Contains("Unexpected token 'Order'"));
+    }
+
+    [Fact]
     public void Parse_MessageMissingArrow_ReturnsStructuralSyntaxError()
     {
         var result = SequenceParser.Parse("sequence Checkout\nparticipant Client\nparticipant Api\nClient Api: POST /orders");
