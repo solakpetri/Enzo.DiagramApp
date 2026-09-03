@@ -300,10 +300,26 @@ dotnet build
 dotnet test
 ```
 
+## Release process
+
+CLI releases are tag-driven. Push a semantic version tag in `vMAJOR.MINOR.PATCH` format, such as `v0.1.0`, to run `.github/workflows/release-cli.yml`.
+
+The release workflow restores, builds, tests, packs `Enzo.Diagrams.Cli`, derives the NuGet package version from the tag without the leading `v`, and publishes the package to NuGet.org.
+
+Maintainers must configure `NUGET_API_KEY` as a GitHub Actions repository secret before publishing. Never commit the NuGet API key.
+
+Basic release steps:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## Repository structure
 
 ```text
 .github/workflows/code-review.yml        Pull-request code review workflow
+.github/workflows/release-cli.yml        Tagged CLI release workflow
 src/Enzo.Diagrams.Api/                  Minimal HTTP API
 src/Enzo.Diagrams.Cli/                  Command-line entry point
 src/Enzo.Diagrams.Core/                 Core project currently present in the solution
