@@ -14,7 +14,7 @@ public sealed class SequenceParser
 
     public static SequenceParseResult Parse(string source)
     {
-        var parser = new SequenceParser(DiagramLexer.Tokenize(source));
+        var parser = new SequenceParser(DiagramLexer.Tokenize(source, readLineTextAfterColon: true));
 
         return parser.ParseSequence();
     }
@@ -82,11 +82,12 @@ public sealed class SequenceParser
         Advance();
 
         var idToken = Expect(TokenKind.Identifier, "Expected participant identifier.");
+        var displayNameToken = Current.Kind == TokenKind.String ? Advance() : null;
         RequireLineEnd();
 
         if (_errors.Count == errorCount && idToken is not null)
         {
-            participants.Add(new SequenceParticipant(kind.Value, idToken.Text, idToken.Line, idToken.Column));
+            participants.Add(new SequenceParticipant(kind.Value, idToken.Text, idToken.Line, idToken.Column, displayNameToken?.Text));
         }
 
         return true;
@@ -137,7 +138,7 @@ public sealed class SequenceParser
         var parts = new List<string>();
         while (Current.Kind is not TokenKind.EndOfLine and not TokenKind.EndOfFile)
         {
-            if (Current.Kind is not TokenKind.Identifier and not TokenKind.String)
+            if (Current.Kind is not TokenKind.Identifier and not TokenKind.String and not TokenKind.LineText)
             {
                 AddError("Expected message label after ':'.");
                 return null;

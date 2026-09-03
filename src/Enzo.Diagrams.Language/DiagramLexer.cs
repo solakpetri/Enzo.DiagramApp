@@ -3,20 +3,22 @@ namespace Enzo.Diagrams.Language;
 public sealed class DiagramLexer
 {
     private readonly string _source;
+    private readonly bool _readLineTextAfterColon;
     private readonly List<SyntaxToken> _tokens = [];
     private readonly List<DiagramSyntaxError> _errors = [];
     private int _index;
     private int _line = 1;
     private int _column = 1;
 
-    private DiagramLexer(string source)
+    private DiagramLexer(string source, bool readLineTextAfterColon)
     {
         _source = source;
+        _readLineTextAfterColon = readLineTextAfterColon;
     }
 
-    public static TokenizeResult Tokenize(string source)
+    public static TokenizeResult Tokenize(string source, bool readLineTextAfterColon = false)
     {
-        var lexer = new DiagramLexer(source);
+        var lexer = new DiagramLexer(source, readLineTextAfterColon);
         lexer.Tokenize();
 
         return new TokenizeResult(lexer._tokens, lexer._errors);
@@ -72,6 +74,12 @@ public sealed class DiagramLexer
             {
                 AddToken(TokenKind.Colon, ":");
                 Advance();
+
+                if (_readLineTextAfterColon)
+                {
+                    ReadLineText();
+                }
+
                 continue;
             }
 
@@ -133,6 +141,34 @@ public sealed class DiagramLexer
         var text = _source[start.._index];
         _tokens.Add(new SyntaxToken(TokenKind.String, text, line, column));
         Advance();
+    }
+
+    private void ReadLineText()
+    {
+        while (!IsAtEnd && Current is (' ' or '\t'))
+        {
+            Advance();
+        }
+
+        if (IsAtEnd || Current is '\r' or '\n')
+        {
+            return;
+        }
+
+        var line = _line;
+        var column = _column;
+        var start = _index;
+
+        while (!IsAtEnd && Current is not '\r' and not '\n')
+        {
+            Advance();
+        }
+
+        var text = _source[start.._index].TrimEnd(' ', '\t');
+        if (text.Length > 0)
+        {
+            _tokens.Add(new SyntaxToken(TokenKind.LineText, text, line, column));
+        }
     }
 
     private void ReadNewLine()

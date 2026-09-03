@@ -35,7 +35,7 @@ public sealed class BootstrapTests
         var result = SequenceParser.Parse("""
             sequence Checkout
             actor Customer
-            participant API
+            participant API "Order API"
             Customer -> API: Checkout
             API --> Customer: Confirmed
             """);
@@ -45,6 +45,7 @@ public sealed class BootstrapTests
         var png = FlowchartPngRenderer.Render(svg);
 
         Assert.Contains("Customer", svg);
+        Assert.Contains("Order API", svg);
         Assert.Contains("stroke-dasharray=\"6 6\"", svg);
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
     }
