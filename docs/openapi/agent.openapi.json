@@ -17,6 +17,11 @@
         "tags": ["Diagrams"],
         "summary": "Validate Enzo.Diagrams DSL.",
         "description": "Parses and validates Enzo.Diagrams DSL without rendering. Use this before rendering non-trivial diagrams. If validation fails, correct the DSL and call validateDiagram again before rendering.",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -47,6 +52,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "A valid API key is required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -57,6 +72,11 @@
         "tags": ["Diagrams"],
         "summary": "Render Enzo.Diagrams DSL.",
         "description": "Parses, validates, lays out, and renders Enzo.Diagrams DSL as SVG or PNG. Prefer format svg unless the user explicitly asks for png. Call renderDiagram only after valid DSL has been produced.",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -95,12 +115,29 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "A valid API key is required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
     }
   },
   "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
     "schemas": {
       "ValidateDiagramRequest": {
         "type": "object",
