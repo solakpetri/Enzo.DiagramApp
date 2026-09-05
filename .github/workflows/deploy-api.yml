@@ -110,40 +110,55 @@ jobs:
             fi
 
       - name: Verify deployment
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            set -euo pipefail
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
 
-            actual_image="$(az containerapp show \
-              --name "$AZURE_CONTAINER_APP_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --query "properties.template.containers[0].image" \
-              --output tsv)"
+          $appJson = az containerapp show `
+            --name $env:AZURE_CONTAINER_APP_NAME `
+            --resource-group $env:AZURE_RESOURCE_GROUP `
+            --query "{image: properties.template.containers[0].image, provisioningState: properties.provisioningState, fqdn: properties.configuration.ingress.fqdn}" `
+            --output json
 
-            if [[ "$actual_image" != "$IMAGE_TAG" ]]; then
-              echo "::error::Container App image is '$actual_image', expected '$IMAGE_TAG'."
-              exit 1
-            fi
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
-            provisioning_state="$(az containerapp show \
-              --name "$AZURE_CONTAINER_APP_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --query "properties.provisioningState" \
-              --output tsv)"
+          $app = $appJson | ConvertFrom-Json
 
-            if [[ "$provisioning_state" != "Succeeded" ]]; then
-              echo "::error::Container App provisioning state is '$provisioning_state'."
-              exit 1
-            fi
+          if ($app.image -ne $env:IMAGE_TAG) {
+            Write-Error "Container App image is '$($app.image)', expected '$env:IMAGE_TAG'."
+            exit 1
+          }
 
-            fqdn="$(az containerapp show \
-              --name "$AZURE_CONTAINER_APP_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --query "properties.configuration.ingress.fqdn" \
-              --output tsv)"
+          if ($app.provisioningState -ne 'Succeeded') {
+            Write-Error "Container App provisioning state is '$($app.provisioningState)'."
+            exit 1
+          }
 
-            if [[ -n "$fqdn" ]]; then
-              curl --fail --silent --show-error --max-time 30 "https://${fqdn}/openapi/v1.json" > /dev/null
-            fi
+          if ([string]::IsNullOrWhiteSpace($app.fqdn)) {
+            Write-Error 'Container App ingress FQDN is missing.'
+            exit 1
+          }
+
+          $uri = "https://$($app.fqdn)/openapi/v1.json"
+
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            Write-Host "Smoke test attempt $attempt of 6: $uri"
+
+            try {
+              Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec 30 | Out-Null
+              Write-Host 'Smoke test succeeded.'
+              exit 0
+            }
+            catch {
+              Write-Warning "Smoke test attempt $attempt failed: $($_.Exception.Message)"
+
+              if ($attempt -lt 6) {
+                Start-Sleep -Seconds 10
+              }
+            }
+          }
+
+          Write-Error 'Smoke test failed after 6 attempts.'
+          exit 1
