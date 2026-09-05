@@ -1,0 +1,16 @@
+flow Architecture
+
+start User "Developer / AI Agent"
+task Dsl "Enzo DSL"
+task Parser "Parser"
+task Validator "Validator"
+task Layout "Layout"
+task Renderer "Renderer"
+end Output "SVG / PNG"
+
+User -> Dsl
+Dsl -> Parser
+Parser -> Validator
+Validator -> Layout
+Layout -> Renderer
+Renderer -> Output
