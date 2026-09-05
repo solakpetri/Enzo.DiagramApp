@@ -1,0 +1,149 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .dockerignore
+      - .github/workflows/deploy-api.yml
+      - Directory.Build.props
+      - src/Enzo.Diagrams.Api/**
+      - src/Enzo.Diagrams.Core/**
+      - src/Enzo.Diagrams.Language/**
+      - src/Enzo.Diagrams.Rendering/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: deploy-api-main
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/solakpetri/enzo-diagrams-api
+  IMAGE_TAG: ghcr.io/solakpetri/enzo-diagrams-api:${{ github.sha }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Azure configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_CONTAINER_APP_NAME; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::${name} repository variable is required."
+              missing=1
+            fi
+          done
+
+          exit "$missing"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/Enzo.Diagrams.Api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Azure Container App
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+
+            az containerapp update \
+              --name "$AZURE_CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --image "$IMAGE_TAG"
+
+            revision_mode="$(az containerapp show \
+              --name "$AZURE_CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "properties.configuration.activeRevisionsMode" \
+              --output tsv)"
+
+            if [[ "$revision_mode" == "Multiple" ]]; then
+              az containerapp ingress traffic set \
+                --name "$AZURE_CONTAINER_APP_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --revision-weight latest=100
+            fi
+
+      - name: Verify deployment
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+
+            actual_image="$(az containerapp show \
+              --name "$AZURE_CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "properties.template.containers[0].image" \
+              --output tsv)"
+
+            if [[ "$actual_image" != "$IMAGE_TAG" ]]; then
+              echo "::error::Container App image is '$actual_image', expected '$IMAGE_TAG'."
+              exit 1
+            fi
+
+            provisioning_state="$(az containerapp show \
+              --name "$AZURE_CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "properties.provisioningState" \
+              --output tsv)"
+
+            if [[ "$provisioning_state" != "Succeeded" ]]; then
+              echo "::error::Container App provisioning state is '$provisioning_state'."
+              exit 1
+            fi
+
+            fqdn="$(az containerapp show \
+              --name "$AZURE_CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "properties.configuration.ingress.fqdn" \
+              --output tsv)"
+
+            if [[ -n "$fqdn" ]]; then
+              curl --fail --silent --show-error --max-time 30 "https://${fqdn}/openapi/v1.json" > /dev/null
+            fi
