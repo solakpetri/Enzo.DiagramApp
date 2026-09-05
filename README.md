@@ -231,6 +231,7 @@ Render SVG through the API:
 ```bash
 curl -s http://localhost:5085/v1/render \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $ENZO_API_KEY" \
   -d '{"source":"sequence Order\nactor Customer\nparticipant Storefront\nCustomer -> Storefront: Create order","format":"svg"}' \
   -o order.svg
 ```
@@ -257,6 +258,12 @@ Endpoints:
 - `POST /v1/validate` accepts `{ "source": "..." }` and returns `{ "valid": true }` for valid DSL.
 - `POST /v1/render` accepts `{ "source": "...", "format": "svg" }` or `{ "source": "...", "format": "png" }` and returns `image/svg+xml` or `image/png`.
 - Invalid requests return `application/problem+json` with an `errors` extension.
+
+## API security
+
+Hosted API requests to `POST /v1/validate` and `POST /v1/render` require the `X-API-Key` request header. The key is configured with `Enzo:ApiKey`, or `Enzo__ApiKey` as an environment variable. Do not commit real API keys.
+
+Generated OpenAPI at `GET /openapi/v1.json` remains public for integration discovery. See [docs/api-authentication.md](docs/api-authentication.md) for Azure Container Apps configuration and [docs/ai-integration.md](docs/ai-integration.md) for ChatGPT Action setup.
 
 ## Docker usage
 

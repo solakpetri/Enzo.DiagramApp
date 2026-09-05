@@ -1,6 +1,6 @@
 # AI Integration
 
-Enzo.Diagrams is deterministic and AI-provider-independent. AI agents can generate Enzo.Diagrams DSL and call the HTTP API, but the repository does not include an LLM SDK, provider dependency, authentication layer, database, or frontend.
+Enzo.Diagrams is deterministic and AI-provider-independent. AI agents can generate Enzo.Diagrams DSL and call the HTTP API, but the repository does not include an LLM SDK, provider dependency, user account system, database, or frontend.
 
 Use the checked-in agent contract at [`docs/openapi/agent.openapi.json`](openapi/agent.openapi.json) for OpenAPI-capable agents.
 
@@ -9,6 +9,8 @@ Public demo API:
 ```text
 https://enzo-diagrams-api.gentlebeach-2a13ea58.northeurope.azurecontainerapps.io
 ```
+
+Hosted validation and rendering requests require an API key in the `X-API-Key` header. Do not place the actual key in prompts, examples, or source-controlled configuration.
 
 ## Agent Flow
 
@@ -117,23 +119,35 @@ For ChatGPT Actions or another OpenAPI-capable agent:
 
 1. Create or configure an Action/tool in the agent provider.
 2. Use the checked-in schema from [`docs/openapi/agent.openapi.json`](openapi/agent.openapi.json).
-3. Set authentication to `None` for the current public demo endpoint.
-4. Test `validateDiagram` with a valid Enzo.Diagrams DSL sample.
-5. Test `renderDiagram` with the same DSL and `format` set to `svg`.
-6. Add the instruction block above so the agent validates before rendering and avoids other diagram syntaxes.
+3. Set Authentication to `API Key`.
+4. Set the header name to `X-API-Key` and provide the key through the agent provider's secret/authentication UI.
+5. Test `validateDiagram` with a valid Enzo.Diagrams DSL sample.
+6. Test `renderDiagram` with the same DSL and `format` set to `svg`.
+7. Add the instruction block above so the agent validates before rendering and avoids other diagram syntaxes.
 
-Authentication is intentionally not implemented in this branch and will be handled separately. The public unauthenticated endpoint is a demo endpoint; do not treat it as production-secure.
+The agent flow remains:
+
+```text
+Natural language
+→ generate Enzo.Diagrams DSL
+→ validateDiagram
+→ correct DSL if necessary
+→ renderDiagram
+```
 
 ## API Contract Notes
 
 The agent contract is version-controlled and uses the public HTTPS server URL. The API also exposes generated OpenAPI at `GET /openapi/v1.json` for runtime inspection.
+
+The checked-in agent OpenAPI contract declares API-key authentication with the `X-API-Key` header on `validateDiagram` and `renderDiagram` only.
+
+See [API authentication](api-authentication.md) for the `Enzo:ApiKey` configuration key and Azure Container Apps setup.
 
 Invalid JSON, missing fields, unsupported formats, parser failures, validation failures, and PNG rasterization failures return `application/problem+json` with an `errors` extension that agents can use to repair DSL.
 
 ## Limitations
 
 - No direct ChatGPT, OpenAI, or LLM integration is packaged in this repository.
-- No authentication is implemented for the public demo endpoint yet.
 - Enzo.Diagrams does not accept Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image input.
 - BPMN support is a small inspired subset, not BPMN 2.0 compliance.
 - Layout is automatic; the API does not currently accept layout hints.
