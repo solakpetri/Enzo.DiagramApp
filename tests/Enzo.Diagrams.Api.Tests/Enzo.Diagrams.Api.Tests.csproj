@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\src\Enzo.Diagrams.Api\Enzo.Diagrams.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\docs\openapi\agent.openapi.json" Link="TestAssets\agent.openapi.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

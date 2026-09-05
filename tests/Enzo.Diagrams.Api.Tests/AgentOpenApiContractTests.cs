@@ -8,7 +8,10 @@ public sealed class AgentOpenApiContractTests
     [Fact]
     public void AgentOpenApiContract_IsValidAgentSchema()
     {
-        using var json = JsonDocument.Parse(File.ReadAllText(GetAgentOpenApiPath()));
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "TestAssets",
+            "agent.openapi.json")));
         var root = json.RootElement;
 
         Assert.Equal("3.1.0", root.GetProperty("openapi").GetString());
@@ -56,17 +59,5 @@ public sealed class AgentOpenApiContractTests
             .GetProperty("schema");
 
         Assert.Equal($"#/components/schemas/{schemaName}", schema.GetProperty("$ref").GetString());
-    }
-
-    private static string GetAgentOpenApiPath()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Enzo.Diagrams.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        return Path.Combine(directory.FullName, "docs", "openapi", "agent.openapi.json");
     }
 }
