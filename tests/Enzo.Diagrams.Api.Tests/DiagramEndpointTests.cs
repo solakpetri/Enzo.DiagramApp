@@ -78,6 +78,23 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task OpenApi_UsesForwardedHttpsScheme()
+    {
+        await using var factory = new WebApplicationFactory<global::Program>();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/openapi/v1.json");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
+
+        var response = await client.SendAsync(request);
+
+        response.EnsureSuccessStatusCode();
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+
+        Assert.StartsWith("https://", json.RootElement.GetProperty("servers")[0].GetProperty("url").GetString());
+    }
+
+    [Fact]
     public async Task Validate_ValidSource_ReturnsSuccess()
     {
         await using var factory = new WebApplicationFactory<global::Program>();
