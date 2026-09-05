@@ -276,57 +276,23 @@ The container listens on HTTP port `8080`.
 
 ## AI integration
 
-The supported integration model is prompt-based DSL generation plus CLI/API rendering. A ChatGPT conversation, custom GPT, coding agent, or automation script can generate Enzo.Diagrams DSL and send it to Enzo.Diagrams for validation and rendering.
-
-No packaged ChatGPT integration is currently configured in this repository. Enzo.Diagrams itself does not call ChatGPT or any LLM, and the core application does not depend on a specific AI provider.
-
-Example AI-assisted rendering flow:
+Enzo.Diagrams supports AI-agent workflows without depending on an AI provider or SDK. Agents generate Enzo.Diagrams DSL, validate it, correct validation errors if needed, then render deterministic SVG or PNG through the API.
 
 ```text
-User:
-"Create a sequence diagram showing an order being created and paid."
-
-              ↓
-
-AI generates:
-
-sequence OrderPayment
-actor Customer "Customer"
-participant Storefront "Storefront"
-participant Payments "Payment Service"
-Customer -> Storefront: Create order
-Storefront -> Payments: POST /payments
-Payments --> Storefront: 200 OK
-Storefront --> Customer: Order paid
-
-              ↓
-
-POST /v1/render
-
-              ↓
-
-Enzo.Diagrams
-
-              ↓
-
-order.svg
+Natural language
+       ↓
+      AI
+       ↓
+Enzo.Diagrams DSL
+       ↓
+ /v1/validate
+       ↓
+  /v1/render
+       ↓
+      SVG
 ```
 
-An AI client can use parser and validation errors returned by `POST /v1/validate` or `POST /v1/render` to repair invalid DSL and retry.
-
-See [docs/ai-integration.md](docs/ai-integration.md) for the agent-facing API contract, integration algorithm, DSL examples, and current limitations.
-
-## AI agent instructions
-
-When generating diagrams for Enzo.Diagrams:
-
-- Use one diagram type: `flow`, `sequence`, or `bpmn`.
-- Produce syntactically valid DSL only; do not produce SVG, PNG, Mermaid, PlantUML, or BPMN XML.
-- Use valid identifiers: ASCII letter or `_` first, then ASCII letters, digits, or `_`.
-- For `flow`, declare `start`, `task`, `decision`, or `end` nodes as `<kind> <Id> "Label"`, then connect them with `<From> -> <To>` and optional `: label`.
-- For `sequence`, declare `actor <Id>` or `participant <Id>`, then messages as `<From> -> <To>: Label` or `<From> --> <To>: Label`.
-- For `bpmn`, declare `start <Id>`, `task <Id> "Label"`, `gateway <Id> "Label"`, or `end <Id>`, then sequence flows as `<From> -> <To>` and optional `: label`.
-- Send the DSL to Enzo.Diagrams through the CLI or HTTP API for validation and rendering.
+See [docs/ai-integration.md](docs/ai-integration.md) for custom-agent instructions, ChatGPT Action setup, DSL examples, and current limitations. Use the checked-in agent OpenAPI contract at [docs/openapi/agent.openapi.json](docs/openapi/agent.openapi.json).
 
 ## Development
 
