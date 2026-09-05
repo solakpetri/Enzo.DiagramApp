@@ -18,9 +18,7 @@ public static class FlowchartPngRenderer
 
         try
         {
-            var settings = skSvg.Settings ?? throw new FlowchartPngRenderException("SVG could not be rasterized.");
-            var typefaceProviders = settings.TypefaceProviders ?? throw new FlowchartPngRenderException("SVG could not be rasterized.");
-            typefaceProviders.Insert(0, BundledTypefaceProvider.Value);
+            ConfigureTypefaceProvider(skSvg);
 
             if (skSvg.Load(stream) is null || skSvg.Picture is null)
             {
@@ -41,6 +39,15 @@ public static class FlowchartPngRenderer
         {
             throw new FlowchartPngRenderException("SVG could not be rasterized.", exception);
         }
+    }
+
+    private static void ConfigureTypefaceProvider(SKSvg skSvg)
+    {
+        var settings = skSvg.Settings
+            ?? throw new FlowchartPngRenderException("SVG rasterizer settings are unavailable.");
+
+        settings.TypefaceProviders ??= [];
+        settings.TypefaceProviders.Insert(0, BundledTypefaceProvider.Value);
     }
 
     private static ITypefaceProvider CreateBundledTypefaceProvider()
