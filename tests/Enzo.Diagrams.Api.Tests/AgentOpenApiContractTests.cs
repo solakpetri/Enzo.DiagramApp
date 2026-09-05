@@ -27,6 +27,9 @@ public sealed class AgentOpenApiContractTests
         Assert.Equal("renderDiagram", renderPost.GetProperty("operationId").GetString());
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
+        AssertApiKeySecurityScheme(root);
+        AssertApiKeySecurityRequirement(validatePost);
+        AssertApiKeySecurityRequirement(renderPost);
 
         var sourceSchema = root.GetProperty("components")
             .GetProperty("schemas")
@@ -59,5 +62,24 @@ public sealed class AgentOpenApiContractTests
             .GetProperty("schema");
 
         Assert.Equal($"#/components/schemas/{schemaName}", schema.GetProperty("$ref").GetString());
+    }
+
+    private static void AssertApiKeySecurityScheme(JsonElement root)
+    {
+        var scheme = root.GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("ApiKey");
+
+        Assert.Equal("apiKey", scheme.GetProperty("type").GetString());
+        Assert.Equal("header", scheme.GetProperty("in").GetString());
+        Assert.Equal("X-API-Key", scheme.GetProperty("name").GetString());
+    }
+
+    private static void AssertApiKeySecurityRequirement(JsonElement operation)
+    {
+        var securityRequirement = Assert.Single(operation.GetProperty("security").EnumerateArray());
+        var apiKeyRequirement = securityRequirement.GetProperty("ApiKey");
+
+        Assert.Empty(apiKeyRequirement.EnumerateArray());
     }
 }

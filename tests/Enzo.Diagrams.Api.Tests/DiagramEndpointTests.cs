@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -42,10 +43,12 @@ public sealed class DiagramEndpointTests
         Available -> Complete : yes
         """;
 
+    private const string ApiKey = "test-api-key";
+
     [Fact]
     public async Task OpenApi_DocumentsPublicDiagramContract()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
+        await using var factory = CreateFactory();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/openapi/v1.json");
@@ -69,6 +72,9 @@ public sealed class DiagramEndpointTests
         AssertResponseContent(renderPost, "200", "image/svg+xml");
         AssertResponseContent(renderPost, "200", "image/png");
         AssertResponseContent(renderPost, "400", "application/problem+json");
+        AssertApiKeySecurityScheme(root);
+        AssertApiKeySecurityRequirement(validatePost);
+        AssertApiKeySecurityRequirement(renderPost);
 
         var renderRequestSchema = root.GetProperty("components").GetProperty("schemas").GetProperty("RenderDiagramRequest");
         Assert.Contains(renderRequestSchema.GetProperty("required").EnumerateArray(), property => property.GetString() == "source");
@@ -80,7 +86,7 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task OpenApi_UsesForwardedHttpsScheme()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
+        await using var factory = CreateFactory();
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/openapi/v1.json");
         request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
@@ -95,10 +101,21 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task OpenApi_RemainsAccessibleWithoutApiKey()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task Validate_ValidSource_ReturnsSuccess()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/validate", new { source = ValidSource });
 
@@ -111,8 +128,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Validate_InvalidDsl_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/validate", new
         {
@@ -131,8 +148,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Validate_SyntaxError_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/validate", new
         {
@@ -151,8 +168,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_ValidSource_ReturnsSvg()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new
         {
@@ -170,8 +187,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_ValidSequence_ReturnsSvg()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new
         {
@@ -189,8 +206,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_ValidBpmnSubset_ReturnsSvg()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new
         {
@@ -207,8 +224,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Validate_UnsupportedBpmnElement_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/validate", new
         {
@@ -225,8 +242,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_PngFormat_ReturnsPng()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new
         {
@@ -243,8 +260,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Validate_SequenceWithUnknownParticipant_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/validate", new
         {
@@ -261,8 +278,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_MissingFormat_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new { source = ValidSource });
 
@@ -276,8 +293,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Render_UnsupportedFormat_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
 
         var response = await client.PostAsJsonAsync("/v1/render", new
         {
@@ -295,8 +312,8 @@ public sealed class DiagramEndpointTests
     [Fact]
     public async Task Validate_MalformedRequest_ReturnsProblemDetails()
     {
-        await using var factory = new WebApplicationFactory<global::Program>();
-        using var client = factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
         using var content = new StringContent("{", Encoding.UTF8, "application/json");
 
         var response = await client.PostAsync("/v1/validate", content);
@@ -308,6 +325,86 @@ public sealed class DiagramEndpointTests
         Assert.Equal("Invalid request.", json.RootElement.GetProperty("title").GetString());
         Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
             error.GetProperty("code").GetString() == "malformed_json");
+    }
+
+    [Fact]
+    public async Task Validate_MissingApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new { source = ValidSource });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task Validate_EmptyApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/validate")
+        {
+            Content = JsonContent.Create(new { source = ValidSource })
+        };
+        request.Headers.TryAddWithoutValidation("X-API-Key", string.Empty);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Validate_InvalidApiKey_ReturnsUnauthorizedWithoutExposingKeys()
+    {
+        const string invalidApiKey = "wrong-api-key";
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/validate")
+        {
+            Content = JsonContent.Create(new { source = ValidSource })
+        };
+        request.Headers.Add("X-API-Key", invalidApiKey);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(ApiKey, body);
+        Assert.DoesNotContain(invalidApiKey, body);
+    }
+
+    [Fact]
+    public async Task Render_CorrectApiKey_ReturnsSvg()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "svg"
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task Render_InvalidApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/render")
+        {
+            Content = JsonContent.Create(new { source = ValidSource, format = "svg" })
+        };
+        request.Headers.Add("X-API-Key", "wrong-api-key");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     private static void AssertRequestSchema(JsonElement operation, string schemaName)
@@ -331,5 +428,37 @@ public sealed class DiagramEndpointTests
             .GetProperty(statusCode)
             .GetProperty("content")
             .GetProperty(mediaType);
+    }
+
+    private static void AssertApiKeySecurityScheme(JsonElement root)
+    {
+        var scheme = root.GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("ApiKey");
+
+        Assert.Equal("apiKey", scheme.GetProperty("type").GetString());
+        Assert.Equal("header", scheme.GetProperty("in").GetString());
+        Assert.Equal("X-API-Key", scheme.GetProperty("name").GetString());
+    }
+
+    private static void AssertApiKeySecurityRequirement(JsonElement operation)
+    {
+        var securityRequirement = Assert.Single(operation.GetProperty("security").EnumerateArray());
+        var apiKeyRequirement = securityRequirement.GetProperty("ApiKey");
+
+        Assert.Empty(apiKeyRequirement.EnumerateArray());
+    }
+
+    private static WebApplicationFactory<global::Program> CreateFactory()
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder => builder.UseSetting("Enzo:ApiKey", ApiKey));
+    }
+
+    private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+        return client;
     }
 }

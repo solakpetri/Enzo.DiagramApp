@@ -4,17 +4,26 @@ using Enzo.Diagrams.Api;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
+builder.Services.AddOptions<EnzoOptions>()
+    .Bind(builder.Configuration.GetSection(EnzoOptions.SectionName))
+    .Validate(options => !builder.Environment.IsProduction() || !string.IsNullOrWhiteSpace(options.ApiKey),
+        "Enzo:ApiKey must be configured in production.")
+    .ValidateOnStart();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
-builder.Services.AddOpenApi("v1");
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.AddDocumentTransformer(AddApiKeySecurityScheme);
+});
 
 var app = builder.Build();
 
@@ -45,6 +54,8 @@ app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken ca
 .WithDescription("Parses and validates the source DSL without rendering. Syntax errors, validation errors, malformed JSON, and missing source values return ProblemDetails with an errors extension.")
 .Accepts<ValidateDiagramRequest>("application/json")
 .Produces<ValidateDiagramResponse>()
+.ProducesProblem(StatusCodes.Status401Unauthorized)
+.AddEndpointFilter<ApiKeyEndpointFilter>()
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken cancellationToken) =>
@@ -104,6 +115,8 @@ app.MapPost("/v1/render", async (HttpRequest httpRequest, CancellationToken canc
 .WithDescription("Parses, validates, lays out, and renders the source DSL as SVG or PNG. The format field supports svg and png. Syntax errors, validation errors, malformed JSON, missing source or format values, unsupported formats, and PNG rasterization failures return ProblemDetails with an errors extension.")
 .Accepts<RenderDiagramRequest>("application/json")
 .Produces(StatusCodes.Status200OK)
+.ProducesProblem(StatusCodes.Status401Unauthorized)
+.AddEndpointFilter<ApiKeyEndpointFilter>()
 .AddOpenApiOperationTransformer((operation, _, _) =>
 {
     if (operation.Responses is null || !operation.Responses.TryGetValue("200", out var response))
@@ -163,6 +176,39 @@ static async Task<(T? Request, IResult? Error)> ReadRequestAsync<T>(
             new DiagramProblemError("request", null, null, "Request body must be valid JSON.", "malformed_json")
         ]));
     }
+}
+
+static Task AddApiKeySecurityScheme(OpenApiDocument document, OpenApiDocumentTransformerContext _, CancellationToken cancellationToken)
+{
+    document.Components ??= new OpenApiComponents();
+    document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+    document.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Name = ApiKeyEndpointFilter.HeaderName
+    };
+    AddApiKeySecurityRequirement(document, "/v1/validate");
+    AddApiKeySecurityRequirement(document, "/v1/render");
+
+    return Task.CompletedTask;
+}
+
+static void AddApiKeySecurityRequirement(OpenApiDocument document, string path)
+{
+    if (document.Paths is null
+        || !document.Paths.TryGetValue(path, out var pathItem)
+        || pathItem.Operations is null
+        || !pathItem.Operations.TryGetValue(HttpMethod.Post, out var operation))
+    {
+        return;
+    }
+
+    operation.Security ??= [];
+    operation.Security.Add(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("ApiKey", document, null)] = []
+    });
 }
 
 static bool TryGetSource(string? value, out string source, out IResult error)
