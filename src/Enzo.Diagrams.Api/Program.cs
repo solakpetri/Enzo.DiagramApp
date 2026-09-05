@@ -3,14 +3,22 @@ using System.Text.Json;
 using Enzo.Diagrams.Api;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddOpenApi("v1");
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.MapOpenApi();
 
 app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken cancellationToken) =>

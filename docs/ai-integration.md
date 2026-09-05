@@ -1,156 +1,139 @@
-# AI Agent Integration
+# AI Integration
 
-Enzo.Diagrams is AI-provider-independent. An AI agent can generate Enzo.Diagrams DSL and call the HTTP API, but Enzo.Diagrams does not call an LLM and does not require API keys.
+Enzo.Diagrams is deterministic and AI-provider-independent. AI agents can generate Enzo.Diagrams DSL and call the HTTP API, but the repository does not include an LLM SDK, provider dependency, authentication layer, database, or frontend.
 
-## Algorithm
+Use the checked-in agent contract at [`docs/openapi/agent.openapi.json`](openapi/agent.openapi.json) for OpenAPI-capable agents.
 
-1. Determine which supported diagram type best matches the request: flowchart, sequence diagram, or the supported BPMN subset.
-2. Generate valid Enzo.Diagrams DSL.
-3. Do not generate Mermaid, PlantUML, Graphviz, raw SVG, BPMN XML, or PNG bytes.
-4. Submit the DSL to `POST /v1/render` with `format` set to `svg` or `png`.
-5. If parsing or validation fails, inspect the returned `application/problem+json` response and its `errors` extension.
-6. Correct the DSL.
-7. Retry rendering.
-8. Present the resulting `image/svg+xml` or `image/png` response to the user.
-
-Use `POST /v1/validate` when you want to check DSL before rendering.
-
-## HTTP API
-
-Validation request:
-
-```json
-{
-  "source": "flow Checkout\nstart Begin \"Order received\"\nend Complete \"Complete order\"\nBegin -> Complete"
-}
-```
-
-Validation success response:
-
-```json
-{
-  "valid": true
-}
-```
-
-Render request:
-
-```json
-{
-  "source": "flow Checkout\nstart Begin \"Order received\"\nend Complete \"Complete order\"\nBegin -> Complete",
-  "format": "svg"
-}
-```
-
-Supported render formats are `svg` and `png`. Successful SVG responses use `image/svg+xml`. Successful PNG responses use `image/png`.
-
-Invalid JSON, missing `source`, missing `format`, unsupported `format`, parser failures, validation failures, and PNG rasterization failures return `application/problem+json`. The response includes an `errors` extension with entries shaped like:
-
-```json
-{
-  "type": "syntax",
-  "line": 2,
-  "column": 1,
-  "message": "Expected ...",
-  "code": null
-}
-```
-
-`type` can include `syntax`, `validation`, `request`, or `rendering`. Validation errors can include a machine-readable `code`.
-
-The generated OpenAPI document is available from the API through `GET /openapi/v1.json`.
-
-## Shared DSL Rules
-
-The first declaration selects the diagram type:
-
-- `flow <Name>` for flowcharts.
-- `sequence <Name>` for sequence diagrams.
-- `bpmn <Name>` for the supported BPMN subset.
-
-Identifiers must start with an ASCII letter or `_`, followed by ASCII letters, digits, or `_`. Keywords are lowercase and case-sensitive. Quoted labels use double quotes and cannot span multiple lines. The DSL has no comment syntax.
-
-## Flowcharts
-
-Use flowcharts for process, decision, and task diagrams.
-
-Supported node declarations:
-
-- `start <Id> "Label"`
-- `task <Id> "Label"`
-- `decision <Id> "Label"`
-- `end <Id> "Label"`
-
-Edges use `<From> -> <To>` and may include an optional label after `:`.
+Public demo API:
 
 ```text
-flow Checkout
-start Begin "Order received"
-task Validate "Validate order"
-decision Available "Stock available?"
-task Reserve "Reserve stock"
-end Complete "Complete order"
-end Reject "Reject order"
-Begin -> Validate
-Validate -> Available
-Available -> Reserve : yes
-Available -> Reject : no
-Reserve -> Complete
+https://enzo-diagrams-api.gentlebeach-2a13ea58.northeurope.azurecontainerapps.io
 ```
 
-## Sequence Diagrams
+## Agent Flow
 
-Use sequence diagrams for participants exchanging ordered messages.
+1. Determine whether the requested diagram should be `flow`, `sequence`, or `bpmn`.
+2. Generate only Enzo.Diagrams DSL.
+3. Do not use Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes.
+4. For non-trivial diagrams, call `validateDiagram` with `POST /v1/validate`.
+5. If validation fails, correct the DSL and validate again.
+6. Only call `renderDiagram` with `POST /v1/render` after valid DSL has been produced.
+7. Prefer SVG unless the user explicitly asks for PNG.
 
-Supported participants:
+```text
+Natural language
+       ↓
+      AI
+       ↓
+Enzo.Diagrams DSL
+       ↓
+ /v1/validate
+       ↓
+  /v1/render
+       ↓
+      SVG
+```
 
-- `actor <Id>`
-- `participant <Id>`
+## Agent Instructions
 
-Messages use `<From> -> <To>: Label` for calls and `<From> --> <To>: Label` for responses. Every message requires a label after `:`.
+Copy this block into a custom GPT, coding agent, or OpenAPI-capable assistant:
+
+```text
+You create diagrams with Enzo.Diagrams.
+
+Generate only Enzo.Diagrams DSL. Do not generate Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes.
+
+Choose exactly one top-level diagram type:
+- flow for flowcharts
+- sequence for sequence diagrams
+- bpmn for the supported BPMN-inspired subset
+
+For non-trivial diagrams, call validateDiagram before rendering. If validation fails, use the returned errors to correct the DSL and call validateDiagram again. Call renderDiagram only after valid DSL has been produced. Prefer format svg unless the user explicitly asks for png.
+
+Flow DSL uses declarations start, task, decision, and end. Connections use Source -> Target, with optional labels as Source -> Target : label. The keyword node is invalid. Mermaid-style square-bracket node syntax must not be used.
+
+Sequence DSL uses actor and participant declarations. Messages use Source -> Target: label, with --> allowed for response-style messages.
+
+BPMN DSL uses start, task, gateway, and end declarations. Sequence flows use Source -> Target, with optional labels as Source -> Target : label.
+```
+
+## DSL Examples
+
+Flowchart:
+
+```text
+flow Example
+
+start Begin "Start"
+task Work "Process"
+decision Valid "Valid?"
+end Done "Done"
+
+Begin -> Work
+Work -> Valid
+Valid -> Done : yes
+```
+
+Supported flow declarations are `start`, `task`, `decision`, and `end`. Flow connections use `Source -> Target`; optional edge labels use `Source -> Target : label`. The keyword `node` is invalid. Mermaid-style square-bracket node syntax such as `A[Start]` must not be used.
+
+Sequence diagram:
 
 ```text
 sequence Checkout
-actor Customer
-participant API
-participant Payment
-Customer -> API: Checkout
-API -> Payment: Charge
-Payment --> API: Success
-API --> Customer: Confirmed
+
+actor Customer "Customer"
+participant Web "Web App"
+participant Api "Order API"
+
+Customer -> Web: Click checkout
+Web -> Api: POST /orders
+Api --> Web: 201 Created
 ```
 
-## BPMN Subset
+Sequence diagrams use `actor` and `participant`. Messages use `->`; `-->` is allowed for response-style messages.
 
-Use the BPMN subset only for simple BPMN-inspired workflows. It is not full BPMN 2.0.
-
-Supported element declarations:
-
-- `start <Id>`
-- `task <Id> "Label"`
-- `gateway <Id> "Label"`
-- `end <Id>`
-
-Sequence flows use `<From> -> <To>` and may include an optional label after `:`.
+BPMN subset:
 
 ```text
-bpmn Order
+bpmn Fulfillment
+
 start Received
 task Validate "Validate order"
-gateway Available "Stock available?"
-task Reserve "Reserve stock"
-end Complete
+gateway Valid "Order valid?"
+task Ship "Ship order"
+end Completed
+
 Received -> Validate
-Validate -> Available
-Available -> Reserve : yes
-Reserve -> Complete
+Validate -> Valid
+Valid -> Ship : yes
+Ship -> Completed
 ```
+
+Supported BPMN declarations are `start`, `task`, `gateway`, and `end`. BPMN sequence flows use `Source -> Target`; optional edge labels use `Source -> Target : label`.
+
+## ChatGPT Action Setup
+
+For ChatGPT Actions or another OpenAPI-capable agent:
+
+1. Create or configure an Action/tool in the agent provider.
+2. Use the checked-in schema from [`docs/openapi/agent.openapi.json`](openapi/agent.openapi.json).
+3. Set authentication to `None` for the current public demo endpoint.
+4. Test `validateDiagram` with a valid Enzo.Diagrams DSL sample.
+5. Test `renderDiagram` with the same DSL and `format` set to `svg`.
+6. Add the instruction block above so the agent validates before rendering and avoids other diagram syntaxes.
+
+Authentication is intentionally not implemented in this branch and will be handled separately. The public unauthenticated endpoint is a demo endpoint; do not treat it as production-secure.
+
+## API Contract Notes
+
+The agent contract is version-controlled and uses the public HTTPS server URL. The API also exposes generated OpenAPI at `GET /openapi/v1.json` for runtime inspection.
+
+Invalid JSON, missing fields, unsupported formats, parser failures, validation failures, and PNG rasterization failures return `application/problem+json` with an `errors` extension that agents can use to repair DSL.
 
 ## Limitations
 
 - No direct ChatGPT, OpenAI, or LLM integration is packaged in this repository.
-- Enzo.Diagrams does not accept Mermaid, PlantUML, Graphviz, raw SVG, BPMN XML, or image input.
+- No authentication is implemented for the public demo endpoint yet.
+- Enzo.Diagrams does not accept Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image input.
 - BPMN support is a small inspired subset, not BPMN 2.0 compliance.
-- Unsupported BPMN features include pools, lanes, message events, timer events, subprocesses, imports, exports, and gateway types beyond the supported gateway syntax.
-- Labels cannot contain escaped quotes or span multiple lines.
 - Layout is automatic; the API does not currently accept layout hints.
