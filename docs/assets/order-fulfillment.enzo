@@ -1,0 +1,16 @@
+flow OrderFulfillment
+
+start Received "Order received"
+task Validate "Validate order"
+decision Valid "Order valid?"
+task Process "Process order"
+task Reject "Reject order"
+end Complete "Order completed"
+end Cancelled "Order cancelled"
+
+Received -> Validate
+Validate -> Valid
+Valid -> Process : yes
+Valid -> Reject : no
+Process -> Complete
+Reject -> Cancelled

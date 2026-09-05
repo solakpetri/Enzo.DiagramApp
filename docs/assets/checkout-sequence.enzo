@@ -1,0 +1,13 @@
+sequence Checkout
+
+actor Customer "Customer"
+participant Web "Web App"
+participant Api "Order API"
+participant Payment "Payment Service"
+
+Customer -> Web: Checkout
+Web -> Api: POST /orders
+Api -> Payment: Charge order #123
+Payment --> Api: 201 Created
+Api --> Web: Order #123 created
+Web --> Customer: Show confirmation

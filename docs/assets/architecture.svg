@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="1104" viewBox="0 0 240 1104">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#475569" /></marker></defs>
+<rect width="100%" height="100%" fill="#f8fafc" />
+<polyline points="120,104 120,200" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<polyline points="120,264 120,360" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<polyline points="120,424 120,520" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<polyline points="120,584 120,680" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<polyline points="120,744 120,840" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<polyline points="120,904 120,1000" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" />
+<rect x="40" y="40" width="160" height="64" rx="28" fill="#dcfce7" stroke="#16a34a" stroke-width="2" />
+<text x="120" y="72" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Developer / AI Agent</text>
+<rect x="40" y="200" width="160" height="64" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+<text x="120" y="232" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Enzo DSL</text>
+<rect x="40" y="360" width="160" height="64" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+<text x="120" y="392" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Parser</text>
+<rect x="40" y="520" width="160" height="64" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+<text x="120" y="552" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Validator</text>
+<rect x="40" y="680" width="160" height="64" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+<text x="120" y="712" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Layout</text>
+<rect x="40" y="840" width="160" height="64" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+<text x="120" y="872" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">Renderer</text>
+<rect x="40" y="1000" width="160" height="64" rx="28" fill="#fee2e2" stroke="#dc2626" stroke-width="2" />
+<text x="120" y="1032" text-anchor="middle" dominant-baseline="middle" fill="#0f172a" font-family="DejaVu Sans, Arial, sans-serif" font-size="14">SVG / PNG</text>
+</svg>

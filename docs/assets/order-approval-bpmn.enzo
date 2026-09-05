@@ -1,0 +1,16 @@
+bpmn OrderApproval
+
+start Submitted
+task Review "Review order"
+gateway Approved "Approved?"
+task Capture "Capture payment"
+task Notify "Notify customer"
+end Complete
+end Rejected
+
+Submitted -> Review
+Review -> Approved
+Approved -> Capture : yes
+Approved -> Rejected : no
+Capture -> Notify
+Notify -> Complete
