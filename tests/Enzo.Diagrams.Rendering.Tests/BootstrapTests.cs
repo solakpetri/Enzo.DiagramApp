@@ -1,4 +1,5 @@
 using Enzo.Diagrams.Language;
+using SkiaSharp;
 using Xunit;
 
 namespace Enzo.Diagrams.Rendering.Tests;
@@ -30,6 +31,32 @@ public sealed class BootstrapTests
     }
 
     [Fact]
+    public void PngRenderer_RendersFlowchartText()
+    {
+        var result = FlowchartParser.Parse("""
+            flow FontTest
+
+            start Begin "Begin"
+            task Render "Render text"
+            decision Valid "Text visible?"
+            end Done "Done"
+
+            Begin -> Render
+            Render -> Valid
+            Valid -> Done : yes
+            """);
+        var layout = FlowchartLayoutEngine.Layout(result.Flowchart!);
+        var svg = FlowchartSvgRenderer.Render(layout);
+
+        var changedPixels = CountChangedPixels(
+            FlowchartPngRenderer.Render(svg),
+            FlowchartPngRenderer.Render(RemoveTextElements(svg)));
+
+        Assert.Contains("Text visible?", svg);
+        Assert.True(changedPixels > 100, $"Expected rendered text to change PNG pixels, but only {changedPixels} pixels changed.");
+    }
+
+    [Fact]
     public void SequenceSvgRenderer_RendersMessagesAndRasterizes()
     {
         var result = SequenceParser.Parse("""
@@ -48,6 +75,30 @@ public sealed class BootstrapTests
         Assert.Contains("Order API", svg);
         Assert.Contains("stroke-dasharray=\"6 6\"", svg);
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
+    public void PngRenderer_RendersSequenceText()
+    {
+        var result = SequenceParser.Parse("""
+            sequence FontTest
+
+            actor Customer "Customer"
+            participant Api "Diagram API"
+
+            Customer -> Api: Render PNG
+            Api --> Customer: Text visible
+            """);
+        var layout = SequenceLayoutEngine.Layout(result.SequenceDiagram!);
+        var svg = SequenceSvgRenderer.Render(layout);
+
+        var changedPixels = CountChangedPixels(
+            FlowchartPngRenderer.Render(svg),
+            FlowchartPngRenderer.Render(RemoveTextElements(svg)));
+
+        Assert.Contains("Diagram API", svg);
+        Assert.Contains("Text visible", svg);
+        Assert.True(changedPixels > 100, $"Expected rendered text to change PNG pixels, but only {changedPixels} pixels changed.");
     }
 
     [Fact]
@@ -130,5 +181,51 @@ public sealed class BootstrapTests
 
         Assert.Contains("DejaVu Sans", svg);
         Assert.DoesNotContain("font-family=\"Arial", svg);
+    }
+
+    private static int CountChangedPixels(byte[] firstPng, byte[] secondPng)
+    {
+        using var first = SKBitmap.Decode(firstPng);
+        using var second = SKBitmap.Decode(secondPng);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first.Width, second.Width);
+        Assert.Equal(first.Height, second.Height);
+
+        var changedPixels = 0;
+        for (var y = 0; y < first.Height; y++)
+        {
+            for (var x = 0; x < first.Width; x++)
+            {
+                if (first.GetPixel(x, y) != second.GetPixel(x, y))
+                {
+                    changedPixels++;
+                }
+            }
+        }
+
+        return changedPixels;
+    }
+
+    private static string RemoveTextElements(string svg)
+    {
+        var result = svg;
+        while (true)
+        {
+            var start = result.IndexOf("<text ", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return result;
+            }
+
+            var end = result.IndexOf("</text>", start, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                return result;
+            }
+
+            result = result.Remove(start, end - start + "</text>".Length);
+        }
     }
 }
