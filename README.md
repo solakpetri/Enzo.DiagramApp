@@ -281,6 +281,12 @@ docker run --rm -p 5085:8080 enzo-diagrams-api
 
 The container listens on HTTP port `8080`.
 
+## API deployment
+
+Merges to `main` deploy the API through `.github/workflows/deploy-api.yml`: GitHub Actions builds the API image, pushes it to GHCR, and updates the existing Azure Container App with the SHA-tagged image. Manual deployment uses `workflow_dispatch` from `main`.
+
+See [docs/azure-container-deployment.md](docs/azure-container-deployment.md) for Azure OIDC setup, required GitHub variables, image tags, rollback, and commit-to-revision tracing.
+
 ## AI integration
 
 Enzo.Diagrams supports AI-agent workflows without depending on an AI provider or SDK. Agents generate Enzo.Diagrams DSL, validate it, correct validation errors if needed, then render deterministic SVG or PNG through the API.
@@ -350,7 +356,9 @@ git push origin v0.1.0
 
 ```text
 .github/workflows/code-review.yml        Pull-request code review workflow
+.github/workflows/deploy-api.yml         API container deployment workflow
 .github/workflows/release-cli.yml        Tagged CLI release workflow
+docs/azure-container-deployment.md       GHCR and Azure Container Apps deployment guide
 examples/flowchart/                      Flowchart DSL examples
 examples/sequence/                       Sequence diagram DSL examples
 examples/bpmn/                           BPMN subset DSL examples
