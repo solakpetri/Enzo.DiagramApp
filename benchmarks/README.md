@@ -1,4 +1,8 @@
-# Enzo vs Mermaid Token Benchmark
+# Enzo vs Mermaid Benchmarks
+
+These benchmarks compare Enzo.Diagrams DSL and Mermaid using the same committed scenario set. They exist to test hypotheses, not to prove that Enzo is better. All results must be reported, including categories where Mermaid wins.
+
+## Benchmark 1: Static DSL Representation
 
 This benchmark compares deterministic source representations for equivalent Enzo.Diagrams DSL and Mermaid diagrams. It answers whether the Enzo DSL requires fewer tokens than Mermaid for the committed fixture set.
 
@@ -8,7 +12,15 @@ The benchmark does not assume Enzo wins. Results are calculated from committed s
 
 AI systems that generate diagrams pay for and are constrained by tokens. A representation that needs fewer output tokens may fit more easily in model context and may cost less to generate. This first benchmark measures only DSL representation/token efficiency, not total LLM generation cost.
 
-Future benchmarks may measure prompt/context tokens, generated output tokens, first-pass validity, repair attempts, and total tokens until valid render.
+This first benchmark measures only committed DSL representation size. It does not measure prompt/context tokens, generated output tokens, first-pass validity, repair attempts, or total tokens until valid render.
+
+Current committed representation results:
+
+| Metric | Enzo | Mermaid |
+| --- | ---: | ---: |
+| Total DSL tokens | 4465 | 4410 |
+
+Overall, Enzo uses 1.2% more tokens in the static fixtures. Enzo sequence diagrams use 8.8% fewer tokens.
 
 ## Dataset
 
@@ -79,3 +91,82 @@ Do not treat this benchmark as evidence about visual quality, Mermaid rendering 
 ## Fairness Rules
 
 Fixtures should not intentionally make Mermaid verbose, shorten Enzo at the cost of semantics, include decorative Mermaid syntax Enzo cannot represent, exclude cases where Mermaid performs better, manually alter results, or cherry-pick favorable categories.
+
+## Benchmark 2: LLM Generation Cost
+
+The LLM benchmark measures the actual token cost of going from the same natural-language request to a valid, renderable diagram. The primary metric is Tokens to Valid Diagram.
+
+It reuses the exact 30 scenarios under `benchmarks/scenarios`. It does not rewrite prompts, cherry-pick scenarios, or optimize the Enzo DSL.
+
+### Methodology
+
+For each scenario, the runner independently asks the same model to generate Enzo.Diagrams DSL and Mermaid source using fixed generation settings. Defaults are 30 scenarios, 5 Enzo runs per scenario, and 5 Mermaid runs per scenario, for 300 generations.
+
+Each initial generation records prompt/input tokens, output tokens, total tokens, duration, first-pass validity, Markdown fence normalization, and validation/render result. If the output is invalid, the runner asks the same model to repair the diagram using the invalid source and validation error. Repair attempts are capped by `--max-repair-attempts`, defaulting to 3.
+
+Tokens to Valid Diagram is defined as:
+
+```text
+initial input tokens + initial output tokens + all repair input tokens + all repair output tokens
+```
+
+Repair prompt context is included. Cold-start input token cost is reported separately because Enzo requires DSL guidance and Mermaid may already be familiar to the model. Generation-only output/repair tokens are also reported, but they are not total API cost.
+
+### Fairness Rules
+
+Both languages receive the same natural-language scenario, model, temperature, top-p, and output token limit. Prompts are stored in `benchmarks/Enzo.Diagrams.LlmBenchmarks/prompts` for auditing. The prompts do not mention the comparison, benchmark results, or token-count optimization.
+
+Do not exclude failed Enzo runs, successful Mermaid runs, or categories where Mermaid wins. Do not manually edit generated benchmark results.
+
+### API And Configuration
+
+The runner uses the OpenAI API and requires `OPENAI_API_KEY`. The key is read from the environment only, is never printed, and is not persisted in results.
+
+The model is configurable with `--model`, `ENZO_LLM_BENCHMARK_MODEL`, or `OPENAI_MODEL`. Generation settings are configurable with `--temperature`, `--top-p`, and `--max-output-tokens`.
+
+### Validation
+
+Enzo output is validated with the real `Enzo.Diagrams.Language` parser and rendered through `Enzo.Diagrams.Rendering`.
+
+Mermaid output is validated by rendering with Mermaid CLI. Install Node.js and Mermaid CLI before running Mermaid benchmarks:
+
+```powershell
+npm install -g @mermaid-js/mermaid-cli
+```
+
+Set a custom Mermaid CLI path with `--mermaid-command` or `MERMAID_CLI` if `mmdc` is not on `PATH`.
+
+### Commands
+
+Cheap smoke test:
+
+```powershell
+dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --runs 1
+```
+
+Full default run:
+
+```powershell
+dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --runs 5
+```
+
+Useful filters:
+
+```powershell
+dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --runs 1 --category sequence --language enzo
+dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --scenario flow-login-basic --model gpt-4o-mini
+```
+
+Resume an interrupted run:
+
+```powershell
+dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --resume benchmarks/results/llm-generation-cost/<run>.json
+```
+
+### Results
+
+Outputs are written under `benchmarks/results/llm-generation-cost` with timestamped filenames so historical runs are not overwritten. The runner writes JSON, CSV, and Markdown after each completed scenario/language/run combination so partial data survives interruptions.
+
+### Limitations
+
+LLM generation is stochastic. Reports include mean, median, min, max, and standard deviation where practical, but the benchmark does not claim statistical significance. Cost estimates are intentionally excluded unless pricing is supplied in future work because model pricing changes over time.
