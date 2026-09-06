@@ -3,7 +3,7 @@
   "info": {
     "title": "Enzo.Diagrams Agent API",
     "version": "1.0.0",
-    "description": "Agent-ready contract for deterministic Enzo.Diagrams validation and rendering. Agents should generate only Enzo.Diagrams DSL, validate it, correct errors when validation fails, and render only valid DSL. Do not generate Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes."
+    "description": "Agent-ready contract for deterministic Enzo.Diagrams validation and rendering. Agents should generate only Enzo.Diagrams DSL, validate it, correct errors when validation fails, and render only valid DSL. Use hosted PNG delivery when an inline image URL is needed. Do not generate Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes."
   },
   "servers": [
     {
@@ -71,7 +71,7 @@
         "operationId": "renderDiagram",
         "tags": ["Diagrams"],
         "summary": "Render Enzo.Diagrams DSL.",
-        "description": "Parses, validates, lays out, and renders Enzo.Diagrams DSL as SVG or PNG. Prefer format svg unless the user explicitly asks for png. Call renderDiagram only after valid DSL has been produced.",
+        "description": "Parses, validates, lays out, and renders Enzo.Diagrams DSL as SVG or PNG. Delivery defaults to raw bytes. Use format png with delivery url when an agent needs a short-lived hosted image URL that points to the actual generated diagram image and can be presented to the user. Call renderDiagram only after valid DSL has been produced.",
         "security": [
           {
             "ApiKey": []
@@ -89,7 +89,7 @@
         },
         "responses": {
           "200": {
-            "description": "Rendered SVG or PNG diagram.",
+            "description": "Rendered SVG or PNG diagram, or hosted PNG result metadata when delivery is url.",
             "content": {
               "image/svg+xml": {
                 "schema": {
@@ -102,6 +102,24 @@
                   "type": "string",
                   "format": "binary",
                   "description": "PNG image bytes."
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostedRenderDiagramResponse"
+                },
+                "examples": {
+                  "hostedPng": {
+                    "summary": "Hosted PNG render result",
+                    "description": "The url points to the actual generated Enzo.Diagrams PNG and can be presented to the user until expiresAt.",
+                    "value": {
+                      "id": "b6f4e81ab3d2440d8ad70c8d68a1828f",
+                      "format": "png",
+                      "contentType": "image/png",
+                      "url": "https://storage.example.invalid/render-results/b6f4e81ab3d2440d8ad70c8d68a1828f.png?sv=redacted",
+                      "expiresAt": "2026-09-06T13:30:00Z"
+                    }
+                  }
                 }
               }
             }
@@ -159,6 +177,39 @@
             "type": "string",
             "enum": ["svg", "png"],
             "description": "Render format. Prefer svg unless the user explicitly asks for png."
+          },
+          "delivery": {
+            "type": ["string", "null"],
+            "enum": ["raw", "url", null],
+            "description": "Result delivery mode. Omit or use raw to receive the rendered SVG/PNG response body. Use url with format png to receive hosted PNG metadata for inline image presentation."
+          }
+        }
+      },
+      "HostedRenderDiagramResponse": {
+        "type": "object",
+        "required": ["id", "format", "contentType", "url", "expiresAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque temporary render identifier."
+          },
+          "format": {
+            "type": "string",
+            "description": "Render format. Hosted URL delivery currently returns png."
+          },
+          "contentType": {
+            "type": "string",
+            "description": "Hosted image content type, normally image/png."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived read-only HTTPS URL for the actual Enzo-rendered PNG. Present this image URL directly to the user; do not redraw or regenerate the diagram."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the hosted image URL expires."
           }
         }
       },

@@ -125,6 +125,69 @@ az containerapp update \
 
 It does not recreate the resource group, Container Apps environment, or Container App. Updating only the image preserves existing Azure-owned configuration such as secrets, `Enzo__ApiKey`, ingress, target port `8080`, scaling limits, replica settings, and the Consumption workload profile.
 
+## Hosted Render Storage
+
+Hosted PNG delivery uses temporary read-only image URLs. Development and tests default to local temp-file storage, but Azure deployments should use private Azure Blob Storage with short-lived SAS URLs.
+
+Required Container App settings for Azure Blob hosted rendering:
+
+| Setting | Purpose |
+| --- | --- |
+| `Enzo__RenderResults__Store=AzureBlob` | Enables Azure Blob-backed hosted render results. |
+| `Enzo__RenderResults__BlobContainerName=<container-name>` | Private container for temporary PNG blobs. |
+| `Enzo__RenderResults__BlobConnectionString=secretref:<secret-name>` | Storage connection string supplied through a Container Apps secret. |
+| `Enzo__RenderResults__UrlLifetimeMinutes=30` | Read-only URL lifetime. Valid range is 1-60 minutes; 30 is the default. |
+
+Create a private container and map the connection string through a secret. Do not make the container public.
+
+```bash
+az storage container create \
+  --name <container-name> \
+  --connection-string "<development-storage-connection-string>" \
+  --public-access off
+
+az containerapp secret set \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --secrets enzo-render-storage='<storage-connection-string>'
+
+az containerapp update \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --set-env-vars \
+    Enzo__RenderResults__Store=AzureBlob \
+    Enzo__RenderResults__BlobContainerName=<container-name> \
+    Enzo__RenderResults__BlobConnectionString=secretref:enzo-render-storage \
+    Enzo__RenderResults__UrlLifetimeMinutes=30
+```
+
+SAS URL expiry prevents reads after the configured lifetime, but the blob object also needs cleanup. Configure a storage lifecycle rule for the hosted render prefix, for example deleting `render-results/` blobs after one day:
+
+```json
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "delete-temporary-enzo-renders",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {
+          "baseBlob": {
+            "delete": {
+              "daysAfterModificationGreaterThan": 1
+            }
+          }
+        },
+        "filters": {
+          "blobTypes": ["blockBlob"],
+          "prefixMatch": ["<container-name>/render-results/"]
+        }
+      }
+    }
+  ]
+}
+```
+
 For multiple-revision apps, the workflow assigns traffic to the latest revision. For single-revision apps, Azure makes the new revision live automatically.
 
 Deployment verification checks that the Container App template references the SHA-tagged image and that provisioning succeeded. If the app has public ingress, the workflow also requests `/openapi/v1.json`, which does not require the `X-API-Key` header.

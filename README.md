@@ -144,6 +144,18 @@ Content-Type: application/json
 {"source":"flow Demo\nstart Begin \"Begin\"\nend Done \"Done\"\nBegin -> Done","format":"svg"}
 ```
 
+For agent-friendly inline images, request a temporary hosted PNG URL:
+
+```http
+POST /v1/render
+X-API-Key: <api-key>
+Content-Type: application/json
+
+{"source":"flow Demo\nstart Begin \"Begin\"\nend Done \"Done\"\nBegin -> Done","format":"png","delivery":"url"}
+```
+
+The response includes `url`, `contentType`, and `expiresAt`. The URL points to the actual Enzo-rendered PNG and does not require exposing the API key to the browser or user.
+
 See [API authentication](docs/api-authentication.md) and the checked-in [agent OpenAPI contract](docs/openapi/agent.openapi.json).
 
 ### AI Agents / ChatGPT
@@ -175,7 +187,8 @@ Agents should:
 2. Use `/v1/validate` for complex diagrams when appropriate.
 3. Correct validation errors if necessary.
 4. Call `/v1/render`.
-5. Return the generated diagram.
+5. Use `format: "png"` and `delivery: "url"` when the agent should present an inline image.
+6. Return the generated diagram or the returned hosted PNG URL.
 
 See [AI integration](docs/ai-integration.md) for agent instructions and ChatGPT Action setup.
 
