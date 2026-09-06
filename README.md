@@ -245,7 +245,6 @@ Identifiers start with an ASCII letter or `_`, followed by ASCII letters, digits
 - `Enzo.Diagrams.Language` contains the lexer, parsers, validators, and layout models.
 - `Enzo.Diagrams.Rendering` renders validated diagrams to SVG and rasterizes SVG to PNG.
 - `Enzo.Diagrams.Api` exposes the validation and rendering HTTP endpoints.
-- `Enzo.Diagrams.Mcp` exposes the remote MCP HTTP endpoint at `/mcp`.
 - `Enzo.Diagrams.Cli` provides the `enzo-diagram` command-line tool.
 - `Enzo.Diagrams.Core` is a shared core project currently present in the solution.
 - `tests/` covers language, rendering, API, and CLI behavior.
@@ -289,21 +288,10 @@ $env:Enzo__ApiKey = "<local-development-key>"
 dotnet run --project src/Enzo.Diagrams.Api --urls http://localhost:5085
 ```
 
-Run the MCP server locally:
-
-```powershell
-dotnet run --project src/Enzo.Diagrams.Mcp --urls http://localhost:5095
-```
-
-Connect MCP clients to `http://localhost:5095/mcp`. A health check is available at `GET /health`.
-
-For ChatGPT Apps setup, use the remote MCP endpoint ending in `/mcp`; see [ChatGPT app setup](docs/chatgpt-app.md).
-
 ## Additional Documentation
 
 - [API authentication](docs/api-authentication.md)
 - [AI integration](docs/ai-integration.md)
-- [ChatGPT app setup](docs/chatgpt-app.md)
 - [Azure Container deployment](docs/azure-container-deployment.md)
 - [Agent OpenAPI contract](docs/openapi/agent.openapi.json)
 

@@ -20,8 +20,8 @@ Hosted validation and rendering requests require an API key in the `X-API-Key` h
 4. For non-trivial diagrams, call `validateDiagram` with `POST /v1/validate`.
 5. If validation fails, correct the DSL and validate again.
 6. Only call `renderDiagram` with `POST /v1/render` after valid DSL has been produced.
-7. For ChatGPT Apps inline image presentation, connect the MCP server and call `render_diagram`; the app component displays the returned Enzo PNG.
-8. Do not recreate, redraw, regenerate, or replace the diagram with an external URL-only workaround.
+7. For ChatGPT inline image presentation, call `renderDiagram` with `format` set to `png` and `delivery` set to `url`.
+8. Present the returned `url` directly to the user. Do not recreate, redraw, or regenerate the diagram with ChatGPT image generation.
 
 ```text
 Natural language
@@ -115,8 +115,6 @@ Ship -> Completed
 Supported BPMN declarations are `start`, `task`, `gateway`, and `end`. BPMN sequence flows use `Source -> Target`; optional edge labels use `Source -> Target : label`.
 
 ## ChatGPT Action Setup
-
-For ChatGPT Apps, connect the remote MCP server from `Settings` -> `Apps` -> `Create`; see [ChatGPT app setup](chatgpt-app.md).
 
 For ChatGPT Actions or another OpenAPI-capable agent:
 
