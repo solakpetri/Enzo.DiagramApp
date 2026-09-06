@@ -15,6 +15,6 @@ public static class EnzoStatusTool
         return new EnzoStatus(
             "Enzo.Diagrams.Mcp",
             assembly.Version?.ToString() ?? "unknown",
-            ["mcp", "http", "tools"]);
+            new[] { "mcp", "http", "tools" });
     }
 }
