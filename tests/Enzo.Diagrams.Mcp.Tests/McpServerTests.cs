@@ -69,31 +69,6 @@ public sealed class McpServerTests
         Assert.DoesNotContain("format", inputSchema);
         Assert.DoesNotContain("services", inputSchema);
         Assert.DoesNotContain("cancellationToken", inputSchema);
-
-        var renderMeta = renderTool.ProtocolTool.Meta;
-        Assert.NotNull(renderMeta);
-        Assert.Equal(EnzoDiagramWidgetResource.ResourceUri, renderMeta["openai/outputTemplate"]?.GetValue<string>());
-        Assert.Equal(EnzoDiagramWidgetResource.ResourceUri, renderMeta["ui"]?["resourceUri"]?.GetValue<string>());
-    }
-
-    [Fact]
-    public async Task Mcp_WidgetResource_ExposesMinimalChatGptComponent()
-    {
-        await using var factory = new WebApplicationFactory<Program>();
-        await using var mcpClient = await CreateMcpClientAsync(factory);
-
-        var result = await mcpClient.ReadResourceAsync(EnzoDiagramWidgetResource.ResourceUri);
-
-        var resource = Assert.IsType<TextResourceContents>(Assert.Single(result.Contents));
-        Assert.Equal(EnzoDiagramWidgetResource.ResourceUri, resource.Uri);
-        Assert.Equal(EnzoDiagramWidgetResource.MimeType, resource.MimeType);
-        Assert.Contains("window.openai", resource.Text);
-        Assert.Contains("diagramDataUrl", resource.Text);
-        Assert.Contains("<img", resource.Text);
-
-        Assert.NotNull(resource.Meta);
-        Assert.Equal("Displays the Enzo-rendered PNG returned by render_diagram.", resource.Meta["openai/widgetDescription"]?.GetValue<string>());
-        Assert.True(resource.Meta["openai/widgetPrefersBorder"]?.GetValue<bool>());
     }
 
     [Theory]
@@ -121,12 +96,6 @@ public sealed class McpServerTests
         Assert.Equal("png", metadata.GetProperty("format").GetString());
         Assert.Equal(diagramFormat, metadata.GetProperty("diagramFormat").GetString());
         Assert.Equal(png.Length, metadata.GetProperty("byteLength").GetInt32());
-
-        Assert.NotNull(result.Meta);
-        var dataUrl = result.Meta["diagramDataUrl"]?.GetValue<string>();
-        Assert.StartsWith("data:image/png;base64,", dataUrl);
-        var widgetPng = Convert.FromBase64String(dataUrl!["data:image/png;base64,".Length..]);
-        Assert.Equal(png, widgetPng);
     }
 
     [Fact]

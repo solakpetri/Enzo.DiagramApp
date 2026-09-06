@@ -297,13 +297,10 @@ dotnet run --project src/Enzo.Diagrams.Mcp --urls http://localhost:5095
 
 Connect MCP clients to `http://localhost:5095/mcp`. A health check is available at `GET /health`.
 
-For ChatGPT Apps setup, use the remote MCP endpoint ending in `/mcp`; see [ChatGPT app setup](docs/chatgpt-app.md).
-
 ## Additional Documentation
 
 - [API authentication](docs/api-authentication.md)
 - [AI integration](docs/ai-integration.md)
-- [ChatGPT app setup](docs/chatgpt-app.md)
 - [Azure Container deployment](docs/azure-container-deployment.md)
 - [Agent OpenAPI contract](docs/openapi/agent.openapi.json)
 

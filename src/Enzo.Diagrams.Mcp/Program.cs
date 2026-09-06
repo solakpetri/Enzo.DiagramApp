@@ -11,7 +11,6 @@ builder.Services.AddMcpServer()
     {
         options.SessionMode = HttpServerSessionMode.Stateless;
     })
-    .WithResourcesFromAssembly()
     .WithToolsFromAssembly();
 
 var app = builder.Build();
