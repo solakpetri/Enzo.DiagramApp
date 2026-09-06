@@ -7,6 +7,13 @@ public static class Program
         var root = FindRepositoryRoot();
         var options = BenchmarkOptions.Parse(args, root);
         var scenariosDirectory = Path.Combine(root, "benchmarks", "scenarios");
+        if (options.ReevaluateFile is not null)
+        {
+            var reportPath = SemanticReevaluation.Run(options.ReevaluateFile, scenariosDirectory);
+            Console.WriteLine($"Wrote semantic re-evaluation: {reportPath}");
+            return 0;
+        }
+
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
         if (string.IsNullOrWhiteSpace(apiKey))
         {
