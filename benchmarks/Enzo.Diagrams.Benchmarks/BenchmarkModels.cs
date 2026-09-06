@@ -6,7 +6,18 @@ public sealed record DiagramScenario(
     string Complexity,
     string Prompt,
     string Enzo,
-    string Mermaid);
+    string Mermaid,
+    DiagramExpectations Expectations);
+
+public sealed record DiagramExpectations(
+    string ExpectedKind,
+    IReadOnlyList<string> RequiredConcepts,
+    int? MinimumNodeCount = null,
+    int? MinimumEdgeCount = null,
+    int? MinimumDecisionCount = null,
+    int? MinimumParticipantCount = null,
+    int? MinimumInteractionCount = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? ConceptAliases = null);
 
 public sealed record RepresentationMetrics(
     int Utf8Bytes,
