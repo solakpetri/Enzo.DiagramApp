@@ -37,6 +37,11 @@ public sealed class BenchmarkOutputWriter
     public void Write(LlmBenchmarkRun run)
     {
         var jsonPath = _jsonPath ?? throw new InvalidOperationException("Output file has not been initialized.");
+        WriteToPath(run, jsonPath);
+    }
+
+    public static void WriteToPath(LlmBenchmarkRun run, string jsonPath)
+    {
         File.WriteAllText(jsonPath, JsonSerializer.Serialize(run, JsonOptions));
         File.WriteAllText(Path.ChangeExtension(jsonPath, ".csv"), ToCsv(run));
         File.WriteAllText(Path.ChangeExtension(jsonPath, ".md"), LlmMarkdownReport.Generate(run));
@@ -49,9 +54,11 @@ public sealed class BenchmarkOutputWriter
             r.InputTokens.ToString(CultureInfo.InvariantCulture), r.OutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalTokens.ToString(CultureInfo.InvariantCulture),
             r.FirstPassValid.ToString(), r.RepairAttempts.ToString(CultureInfo.InvariantCulture), r.RepairInputTokens.ToString(CultureInfo.InvariantCulture),
             r.RepairOutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalRepairTokens.ToString(CultureInfo.InvariantCulture),
-            r.TokensToValidDiagram.ToString(CultureInfo.InvariantCulture), r.RenderSuccess.ToString(), r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(r.ErrorCategory ?? string.Empty)]));
+            r.TokensToValidDiagram.ToString(CultureInfo.InvariantCulture), Csv(r.TokensToValidEquivalentDiagram?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+            r.SyntaxValid.ToString(), r.RenderSuccess.ToString(), r.RenderValid.ToString(), r.KindValid.ToString(), r.StructureValid.ToString(), r.SemanticValid.ToString(), r.EquivalentValid.ToString(),
+            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
 
-        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,renderSuccess,finalValid,normalizationApplied,errorCategory", .. rows]);
+        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,failureReasons,errorCategory", .. rows]);
     }
 
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";

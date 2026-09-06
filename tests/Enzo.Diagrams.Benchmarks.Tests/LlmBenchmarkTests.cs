@@ -19,7 +19,7 @@ public sealed class LlmBenchmarkTests
     {
         var result = new LlmRunResult("s1", "flow", "simple", DiagramLanguages.Enzo, "m", 1, [
             Attempt(0, false, 10, 5, false),
-            Attempt(1, true, 8, 4, true)], null);
+            Attempt(1, true, 8, 4, true, equivalent: true)], null);
 
         Assert.False(result.FirstPassValid);
         Assert.True(result.FinalValid);
@@ -28,6 +28,8 @@ public sealed class LlmBenchmarkTests
         Assert.Equal(4, result.RepairOutputTokens);
         Assert.Equal(12, result.TotalRepairTokens);
         Assert.Equal(27, result.TokensToValidDiagram);
+        Assert.Equal(27, result.TokensToValidEquivalentDiagram);
+        Assert.True(result.EquivalentValid);
     }
 
     [Fact]
@@ -115,18 +117,41 @@ public sealed class LlmBenchmarkTests
 
         Assert.Contains("# Enzo vs Mermaid - LLM Generation Benchmark", report);
         Assert.Contains("Avg tokens to valid diagram", report);
+        Assert.Contains("Avg successful tokens to valid equivalent diagram", report);
+        Assert.Contains("Equivalent By Category", report);
         Assert.Contains("Cold start includes", report);
         Assert.Contains("| flow |", report);
     }
 
-    private static GenerationAttempt Attempt(int number, bool repair, int input, int output, bool valid) =>
-        new(number, repair, input, output, input + output, valid ? "valid" : "bad", valid ? "valid" : "bad", false, valid, valid, valid ? null : "invalid", 1);
+    [Fact]
+    public void Reevaluate_WritesSeparateSemanticReportWithoutChangingOriginal()
+    {
+        var output = TempDirectory();
+        var input = Path.Combine(output, "historical.json");
+        var run = new LlmBenchmarkRun(new LlmBenchmarkMetadata("r", DateTimeOffset.UtcNow, "m", 1, 0, 0.2, 1, 100, "flow-login-basic", "all", DiagramLanguages.Mermaid), [
+            new LlmRunResult("sequence-login-basic", "sequence", "simple", DiagramLanguages.Mermaid, "m", 1, [
+                new GenerationAttempt(0, false, 1, 2, 3, "flowchart TD\nA[User]\nB[Api]\nA --> B", "flowchart TD\nA[User]\nB[Api]\nA --> B", false, true, true, null, 1)], null)]);
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true };
+        File.WriteAllText(input, System.Text.Json.JsonSerializer.Serialize(run, jsonOptions));
+        var original = File.ReadAllText(input);
+
+        var enrichedPath = SemanticReevaluation.Run(input, ScenariosDirectory());
+
+        Assert.NotEqual(input, enrichedPath);
+        Assert.Equal(original, File.ReadAllText(input));
+        var enriched = System.Text.Json.JsonSerializer.Deserialize<LlmBenchmarkRun>(File.ReadAllText(enrichedPath), jsonOptions)!;
+        Assert.False(Assert.Single(enriched.Results).EquivalentValid);
+        Assert.Contains("Expected sequence", Assert.Single(enriched.Results).FailureReasons[0]);
+    }
+
+    private static GenerationAttempt Attempt(int number, bool repair, int input, int output, bool valid, bool equivalent = false) =>
+        new(number, repair, input, output, input + output, valid ? "valid" : "bad", valid ? "valid" : "bad", false, valid, valid, valid ? null : "invalid", 1, valid, valid, equivalent, equivalent, equivalent, equivalent, equivalent ? [] : ["not equivalent"], null);
 
     private static LlmBenchmarkRunner Runner(IDiagramModelClient client, IDiagramValidator validator, string output) =>
         new(client, new Dictionary<string, IDiagramValidator> { [DiagramLanguages.Enzo] = validator, [DiagramLanguages.Mermaid] = validator }, Prompts(), new BenchmarkOutputWriter());
 
     private static BenchmarkOptions Options(string output, string language, string? resume = null) =>
-        new(1, 3, "fake-model", 0.2, 1, 100, "flow-login-basic", null, language, output, resume, "mmdc");
+        new(1, 3, "fake-model", 0.2, 1, 100, "flow-login-basic", null, language, output, resume, null, "mmdc");
 
     private static PromptStore Prompts() => new(Path.Combine(RepositoryRoot(), "benchmarks", "Enzo.Diagrams.LlmBenchmarks", "prompts"));
     private static string ScenariosDirectory() => Path.Combine(RepositoryRoot(), "benchmarks", "scenarios");

@@ -12,6 +12,7 @@ public sealed record BenchmarkOptions(
     string LanguageFilter,
     string OutputDirectory,
     string? ResumeFile,
+    string? ReevaluateFile,
     string MermaidCommand)
 {
     public static BenchmarkOptions Parse(string[] args, string repositoryRoot)
@@ -29,6 +30,7 @@ public sealed record BenchmarkOptions(
             String(values, "language", "all").ToLowerInvariant(),
             String(values, "output-directory", Path.Combine(repositoryRoot, "benchmarks", "results", "llm-generation-cost")),
             NullableString(values, "resume"),
+            NullableString(values, "reevaluate"),
             String(values, "mermaid-command", Environment.GetEnvironmentVariable("MERMAID_CLI") ?? MermaidExecutableResolver.GetDefaultExecutable()));
     }
 

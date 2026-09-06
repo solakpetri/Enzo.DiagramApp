@@ -27,6 +27,19 @@ public static class ScenarioLoader
             throw new BenchmarkValidationException($"Duplicate scenario id: {duplicateId}");
         }
 
+        foreach (var scenario in scenarios)
+        {
+            if (scenario.Expectations is null)
+            {
+                throw new BenchmarkValidationException($"Scenario '{scenario.Id}' is missing semantic expectations.");
+            }
+
+            if (!string.Equals(scenario.Category, scenario.Expectations.ExpectedKind, StringComparison.Ordinal))
+            {
+                throw new BenchmarkValidationException($"Scenario '{scenario.Id}' category '{scenario.Category}' must match expected kind '{scenario.Expectations.ExpectedKind}'.");
+            }
+        }
+
         return scenarios;
     }
 

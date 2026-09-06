@@ -20,9 +20,12 @@ public sealed record ModelResponse(
     TimeSpan Duration);
 
 public sealed record ValidationOutcome(
-    bool IsValid,
+    bool SyntaxValid,
     bool RenderSuccess,
-    string? Error);
+    string? Error)
+{
+    public bool IsValid => SyntaxValid && RenderSuccess;
+}
 
 public sealed record GenerationAttempt(
     int AttemptNumber,
@@ -36,7 +39,15 @@ public sealed record GenerationAttempt(
     bool Valid,
     bool RenderSuccess,
     string? ValidationError,
-    long DurationMs);
+    long DurationMs,
+    bool SyntaxValid = false,
+    bool RenderValid = false,
+    bool KindValid = false,
+    bool StructureValid = false,
+    bool SemanticValid = false,
+    bool EquivalentValid = false,
+    IReadOnlyList<string>? FailureReasons = null,
+    SemanticValidationDiagnostics? SemanticDiagnostics = null);
 
 public sealed record LlmRunResult(
     string ScenarioId,
@@ -57,10 +68,27 @@ public sealed record LlmRunResult(
     public int RepairOutputTokens => Attempts.Where(attempt => attempt.IsRepair).Sum(attempt => attempt.OutputTokens);
     public int TotalRepairTokens => Attempts.Where(attempt => attempt.IsRepair).Sum(attempt => attempt.TotalTokens);
     public int TokensToValidDiagram => Attempts.Sum(attempt => attempt.InputTokens + attempt.OutputTokens);
+    public int? TokensToValidEquivalentDiagram
+    {
+        get
+        {
+            var index = Attempts.ToList().FindIndex(attempt => attempt.EquivalentValid);
+            return index < 0 ? null : Attempts.Take(index + 1).Sum(attempt => attempt.InputTokens + attempt.OutputTokens);
+        }
+    }
+
+    public bool SyntaxValid => FinalAttempt?.SyntaxValid == true;
     public bool RenderSuccess => Attempts.LastOrDefault()?.RenderSuccess == true;
+    public bool RenderValid => FinalAttempt?.RenderValid == true;
+    public bool KindValid => FinalAttempt?.KindValid == true;
+    public bool StructureValid => FinalAttempt?.StructureValid == true;
+    public bool SemanticValid => FinalAttempt?.SemanticValid == true;
+    public bool EquivalentValid => FinalAttempt?.EquivalentValid == true;
+    public IReadOnlyList<string> FailureReasons => FinalAttempt?.FailureReasons ?? [];
     public bool FinalValid => Attempts.LastOrDefault()?.Valid == true;
     public bool NormalizationApplied => Attempts.Any(attempt => attempt.NormalizationApplied);
     private GenerationAttempt? InitialAttempt => Attempts.FirstOrDefault(attempt => !attempt.IsRepair);
+    private GenerationAttempt? FinalAttempt => Attempts.LastOrDefault();
 }
 
 public sealed record LlmBenchmarkMetadata(
