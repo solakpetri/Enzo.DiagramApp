@@ -1,0 +1,21 @@
+Return only valid Mermaid diagram source. Do not use Markdown fences or explanations.
+
+Choose the diagram kind that best matches the request:
+
+Flowchart or business process:
+flowchart TD
+Start([Start])
+Task[Task label]
+Choice{Question?}
+End([End])
+Start --> Task
+Choice -- yes --> End
+
+Sequence diagram:
+sequenceDiagram
+actor User
+participant Api
+User->>Api: Request
+Api-->>User: Response
+
+Use simple identifiers without spaces. Declare nodes or participants clearly before referencing them.
