@@ -4,6 +4,8 @@ using ModelContextProtocol.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<IEnzoDiagramRenderer, EnzoDiagramRenderer>();
+
 builder.Services.AddMcpServer()
     .WithHttpTransport(options =>
     {
