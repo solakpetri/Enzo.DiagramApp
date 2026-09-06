@@ -68,6 +68,7 @@ public sealed class McpServerTests
         Assert.Contains("source", inputSchema);
         Assert.DoesNotContain("format", inputSchema);
         Assert.DoesNotContain("services", inputSchema);
+        Assert.DoesNotContain("cancellationToken", inputSchema);
     }
 
     [Theory]
@@ -116,6 +117,28 @@ public sealed class McpServerTests
         Assert.Equal("syntax", metadata.GetProperty("errors")[0].GetProperty("type").GetString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RenderDiagram_MissingSource_ReturnsCleanMcpError(string? source)
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        await using var mcpClient = await CreateMcpClientAsync(factory);
+
+        var result = await mcpClient.CallToolAsync("render_diagram", new Dictionary<string, object?>
+        {
+            ["source"] = source
+        });
+
+        Assert.True(result.IsError);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+        Assert.Equal("Source is required.", text.Text);
+
+        var metadata = Assert.IsType<JsonElement>(result.StructuredContent);
+        Assert.Equal("required", metadata.GetProperty("errors")[0].GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task RenderDiagram_RendererFailure_ReturnsCleanMcpError()
     {
@@ -160,7 +183,7 @@ public sealed class McpServerTests
 
     private sealed class FailingRenderer(string message) : IEnzoDiagramRenderer
     {
-        public byte[] RenderPng(DiagramParseResult result)
+        public Task<byte[]> RenderPngAsync(DiagramParseResult result, CancellationToken cancellationToken)
         {
             throw new FlowchartPngRenderException(message);
         }

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -18,12 +19,13 @@ public static class RenderDiagramTool
 
     [McpServerTool(Name = "render_diagram", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(RenderDiagramMetadata))]
     [Description("Renders complete Enzo.Diagrams DSL as an Enzo-generated PNG image. Input is only the source DSL; output format defaults to PNG.")]
-    public static CallToolResult RenderDiagram(
+    public static async Task<CallToolResult> RenderDiagram(
         [Required]
         [MinLength(1)]
         [Description("Complete Enzo.Diagrams DSL source. The first declaration is flow, sequence, or bpmn.")]
-        string source,
-        IServiceProvider services)
+        string? source,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(source))
         {
@@ -36,6 +38,7 @@ public static class RenderDiagramTool
             });
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var parseResult = DiagramParser.Parse(source);
         if (!parseResult.IsSuccess)
         {
@@ -47,7 +50,7 @@ public static class RenderDiagramTool
 
         try
         {
-            var png = services.GetRequiredService<IEnzoDiagramRenderer>().RenderPng(parseResult);
+            var png = await services.GetRequiredService<IEnzoDiagramRenderer>().RenderPngAsync(parseResult, cancellationToken);
             var metadata = new RenderDiagramMetadata(PngContentType, PngFormat, DiagramFormat(parseResult), png.Length);
 
             return new CallToolResult
@@ -56,8 +59,12 @@ public static class RenderDiagramTool
                 StructuredContent = JsonSerializer.SerializeToElement(metadata, JsonOptions)
             };
         }
-        catch (FlowchartPngRenderException)
+        catch (FlowchartPngRenderException exception)
         {
+            services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Enzo.Diagrams.Mcp.RenderDiagramTool")
+                .LogError(exception, "Enzo PNG rendering failed.");
+
             return Error("Diagram could not be rendered as PNG.", new
             {
                 errors = new[]
@@ -80,23 +87,32 @@ public static class RenderDiagramTool
 
     private static object[] ToDiagramErrors(DiagramParseResult result)
     {
-        return [
-            .. result.Errors.Select(error => new
+        var errors = new List<object>();
+
+        foreach (var error in result.Errors)
+        {
+            errors.Add(new
             {
                 type = "syntax",
                 line = error.Line,
                 column = error.Column,
                 message = error.Message
-            }),
-            .. result.ValidationErrors.Select(error => new
+            });
+        }
+
+        foreach (var error in result.ValidationErrors)
+        {
+            errors.Add(new
             {
                 type = "validation",
                 line = error.Line,
                 column = error.Column,
                 message = error.Message,
                 code = error.Kind
-            })
-        ];
+            });
+        }
+
+        return errors.ToArray();
     }
 
     private static string DiagramFormat(DiagramParseResult result)

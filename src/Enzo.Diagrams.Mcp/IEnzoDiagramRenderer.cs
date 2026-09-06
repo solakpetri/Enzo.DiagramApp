@@ -4,5 +4,5 @@ namespace Enzo.Diagrams.Mcp;
 
 public interface IEnzoDiagramRenderer
 {
-    byte[] RenderPng(DiagramParseResult result);
+    Task<byte[]> RenderPngAsync(DiagramParseResult result, CancellationToken cancellationToken);
 }

@@ -5,10 +5,15 @@ namespace Enzo.Diagrams.Mcp;
 
 public sealed class EnzoDiagramRenderer : IEnzoDiagramRenderer
 {
-    public byte[] RenderPng(DiagramParseResult result)
+    public Task<byte[]> RenderPngAsync(DiagramParseResult result, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var svg = DiagramSvgRenderer.Render(result);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        return FlowchartPngRenderer.Render(svg);
+        var png = FlowchartPngRenderer.Render(svg);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult(png);
     }
 }
