@@ -22,7 +22,7 @@ public sealed class EnzoDiagramValidator : IDiagramValidator
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
-            return Task.FromResult(new ValidationOutcome(false, false, ex.Message));
+            return Task.FromResult(new ValidationOutcome(true, false, ex.Message));
         }
     }
 }

@@ -40,11 +40,11 @@ public sealed class LlmBenchmarkRunner(
         try
         {
             var systemPrompt = prompts.GetPrompt(language);
-            attempts.Add(await GenerateAttemptAsync(language, systemPrompt, scenario.Prompt, settings, 0, false, cancellationToken));
+            attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, scenario.Prompt, settings, 0, false, cancellationToken));
             for (var repair = 1; attempts.Last().Valid is false && repair <= maxRepairAttempts; repair++)
             {
                 var userPrompt = RepairPrompt(attempts.Last().NormalizedSource, attempts.Last().ValidationError);
-                attempts.Add(await GenerateAttemptAsync(language, systemPrompt, userPrompt, settings, repair, true, cancellationToken));
+                attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, userPrompt, settings, repair, true, cancellationToken));
             }
 
             return Result(scenario, language, settings.Model, runNumber, attempts, attempts.Last().Valid ? null : "validation");
@@ -55,11 +55,12 @@ public sealed class LlmBenchmarkRunner(
         }
     }
 
-    private async Task<GenerationAttempt> GenerateAttemptAsync(string language, string systemPrompt, string userPrompt, ModelSettings settings, int attemptNumber, bool isRepair, CancellationToken cancellationToken)
+    private async Task<GenerationAttempt> GenerateAttemptAsync(DiagramScenario scenario, string language, string systemPrompt, string userPrompt, ModelSettings settings, int attemptNumber, bool isRepair, CancellationToken cancellationToken)
     {
         var response = await modelClient.CompleteAsync(systemPrompt, userPrompt, settings, cancellationToken);
         var normalized = SourceNormalizer.RemoveMarkdownFence(response.Source);
         var validation = await validators[language].ValidateAsync(normalized.Source, cancellationToken);
+        var semantic = SemanticDiagramValidator.Validate(scenario, language, normalized.Source, validation.SyntaxValid, validation.RenderSuccess);
         return new GenerationAttempt(
             attemptNumber,
             isRepair,
@@ -72,7 +73,15 @@ public sealed class LlmBenchmarkRunner(
             validation.IsValid,
             validation.RenderSuccess,
             validation.Error,
-            (long)response.Duration.TotalMilliseconds);
+            (long)response.Duration.TotalMilliseconds,
+            validation.SyntaxValid,
+            validation.RenderSuccess,
+            semantic.KindValid,
+            semantic.StructureValid,
+            semantic.SemanticValid,
+            semantic.EquivalentValid,
+            semantic.FailureReasons,
+            semantic.Diagnostics);
     }
 
     private static string RepairPrompt(string source, string? error) =>
