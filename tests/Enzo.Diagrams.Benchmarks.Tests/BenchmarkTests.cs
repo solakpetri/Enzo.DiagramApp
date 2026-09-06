@@ -101,7 +101,8 @@ public sealed class BenchmarkTests
             "simple",
             "Connect a start node to an end node.",
             "flow Valid\nstart Begin \"Begin\"\nend Done \"Done\"\nBegin -> Done",
-            "flowchart TD\nBegin([Begin])\nDone([Done])\nBegin --> Done");
+            "flowchart TD\nBegin([Begin])\nDone([Done])\nBegin --> Done",
+            new DiagramExpectations("flow", ["begin", "done"], MinimumNodeCount: 2, MinimumEdgeCount: 1));
     }
 
     private static string RepositoryRoot()
