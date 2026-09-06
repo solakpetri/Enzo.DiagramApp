@@ -75,7 +75,7 @@ public sealed class MermaidCliValidator(string command) : IDiagramValidator
         }
         catch (Win32Exception ex)
         {
-            return new ValidationOutcome(false, false, $"Mermaid CLI '{command}' could not be started: {ex.Message}");
+            return new ValidationOutcome(false, false, $"Mermaid CLI was not found. Install it with npm install -g @mermaid-js/mermaid-cli and ensure {command} is available on PATH. {ex.Message}");
         }
     }
 
@@ -108,4 +108,11 @@ public sealed class MermaidCliValidator(string command) : IDiagramValidator
             File.Delete(path);
         }
     }
+}
+
+public static class MermaidExecutableResolver
+{
+    public static string GetDefaultExecutable() => GetDefaultExecutable(OperatingSystem.IsWindows());
+
+    public static string GetDefaultExecutable(bool isWindows) => isWindows ? "mmdc.cmd" : "mmdc";
 }

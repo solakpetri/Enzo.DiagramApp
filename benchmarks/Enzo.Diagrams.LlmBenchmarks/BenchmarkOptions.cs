@@ -29,7 +29,7 @@ public sealed record BenchmarkOptions(
             String(values, "language", "all").ToLowerInvariant(),
             String(values, "output-directory", Path.Combine(repositoryRoot, "benchmarks", "results", "llm-generation-cost")),
             NullableString(values, "resume"),
-            String(values, "mermaid-command", Environment.GetEnvironmentVariable("MERMAID_CLI") ?? "mmdc"));
+            String(values, "mermaid-command", Environment.GetEnvironmentVariable("MERMAID_CLI") ?? MermaidExecutableResolver.GetDefaultExecutable()));
     }
 
     private static Dictionary<string, string> ReadArgs(string[] args)

@@ -41,6 +41,18 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
+    public void GetDefaultExecutable_ReturnsWindowsNpmCommandShim()
+    {
+        Assert.Equal("mmdc.cmd", MermaidExecutableResolver.GetDefaultExecutable(isWindows: true));
+    }
+
+    [Fact]
+    public void GetDefaultExecutable_ReturnsUnixCommandName()
+    {
+        Assert.Equal("mmdc", MermaidExecutableResolver.GetDefaultExecutable(isWindows: false));
+    }
+
+    [Fact]
     public async Task RunAsync_RepairsInvalidGenerationAndSerializesResults()
     {
         var output = TempDirectory();
