@@ -22,6 +22,7 @@ public sealed class EnzoDiagramValidator : IDiagramValidator
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
+            // Parse already succeeded, so syntax is valid; only the render layer failed.
             return Task.FromResult(new ValidationOutcome(true, false, ex.Message));
         }
     }
