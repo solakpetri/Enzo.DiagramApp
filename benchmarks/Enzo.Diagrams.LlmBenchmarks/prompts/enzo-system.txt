@@ -1,0 +1,31 @@
+Return only valid Enzo.Diagrams DSL. Do not use Markdown fences or explanations.
+
+Choose the diagram kind that best matches the request:
+
+Flowchart:
+flow Name
+start Id "Label"
+task Id "Label"
+decision Id "Question?"
+end Id "Label"
+From -> To
+From -> To : label
+
+Sequence diagram:
+sequence Name
+actor Id
+participant Id
+participant Id "Display Name"
+From -> To: message
+From --> To: return message
+
+Business process:
+bpmn Name
+start Id
+task Id "Label"
+gateway Id "Question?"
+end Id
+From -> To
+From -> To : label
+
+Identifiers must be single words using letters and numbers only. Declare every node or participant before referencing it.
