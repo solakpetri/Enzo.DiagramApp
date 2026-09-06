@@ -4,9 +4,4 @@
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj" />
-    <ProjectReference Include="..\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj" />
-  </ItemGroup>
-
 </Project>
