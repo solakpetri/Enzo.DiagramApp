@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\benchmarks\Enzo.Diagrams.Benchmarks\Enzo.Diagrams.Benchmarks.csproj" />
+    <ProjectReference Include="..\..\benchmarks\Enzo.Diagrams.LlmBenchmarks\Enzo.Diagrams.LlmBenchmarks.csproj" />
   </ItemGroup>
 
 </Project>
