@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,11 @@ public static class RenderDiagramTool
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [McpServerTool(Name = "render_diagram", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(RenderDiagramMetadata))]
+    [McpMeta("ui", "", JsonValue = """{"resourceUri":"ui://widget/enzo-diagram.html"}""")]
+    [McpMeta("openai/outputTemplate", EnzoDiagramWidgetResource.ResourceUri)]
+    [McpMeta("openai/toolInvocation/invoking", "Rendering Enzo diagram")]
+    [McpMeta("openai/toolInvocation/invoked", "Enzo diagram rendered")]
+    [McpMeta("securitySchemes", "", JsonValue = """[{"type":"noauth"}]""")]
     [Description("Renders complete Enzo.Diagrams DSL as an Enzo-generated PNG image. Input is only the source DSL; output format defaults to PNG.")]
     public static async Task<CallToolResult> RenderDiagram(
         [Required]
@@ -56,7 +62,11 @@ public static class RenderDiagramTool
             return new CallToolResult
             {
                 Content = [ImageContentBlock.FromBytes(png, PngContentType)],
-                StructuredContent = JsonSerializer.SerializeToElement(metadata, JsonOptions)
+                StructuredContent = JsonSerializer.SerializeToElement(metadata, JsonOptions),
+                Meta = new JsonObject
+                {
+                    ["diagramDataUrl"] = $"data:{PngContentType};base64,{Convert.ToBase64String(png)}"
+                }
             };
         }
         catch (FlowchartPngRenderException exception)
