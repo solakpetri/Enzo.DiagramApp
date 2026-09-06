@@ -365,6 +365,26 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task Render_BlankDelivery_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png",
+            delivery = " "
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "unsupported_delivery");
+    }
+
+    [Fact]
     public void RenderResultIds_AreOpaqueAndNonSequential()
     {
         var first = RenderResultIds.Create();
@@ -645,11 +665,6 @@ public sealed class DiagramEndpointTests
                 "https://storage.example.invalid/render-results/test.png?sv=redacted",
                 DateTimeOffset.UtcNow.Add(lifetime)));
         }
-
-        public ValueTask<StoredRenderResultContent?> GetAsync(string id, CancellationToken cancellationToken)
-        {
-            return ValueTask.FromResult<StoredRenderResultContent?>(null);
-        }
     }
 
     private sealed class FailingRenderResultStore(string message) : IRenderResultStore
@@ -662,11 +677,6 @@ public sealed class DiagramEndpointTests
             CancellationToken cancellationToken)
         {
             throw new RenderResultStoreException(message);
-        }
-
-        public ValueTask<StoredRenderResultContent?> GetAsync(string id, CancellationToken cancellationToken)
-        {
-            return ValueTask.FromResult<StoredRenderResultContent?>(null);
         }
     }
 }

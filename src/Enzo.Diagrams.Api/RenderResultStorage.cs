@@ -14,7 +14,10 @@ internal interface IRenderResultStore
         TimeSpan lifetime,
         Uri requestBaseUri,
         CancellationToken cancellationToken);
+}
 
+internal interface ILocalRenderResultReader
+{
     ValueTask<StoredRenderResultContent?> GetAsync(string id, CancellationToken cancellationToken);
 }
 
@@ -22,7 +25,9 @@ internal sealed record StoredRenderResult(string Id, string Url, DateTimeOffset 
 
 internal sealed record StoredRenderResultContent(byte[] Bytes, string ContentType, DateTimeOffset ExpiresAt);
 
-internal sealed class LocalRenderResultStore(RenderResultOptions options, TimeProvider timeProvider) : IRenderResultStore
+internal sealed class LocalRenderResultStore(RenderResultOptions options, TimeProvider timeProvider) :
+    IRenderResultStore,
+    ILocalRenderResultReader
 {
     private readonly ConcurrentDictionary<string, StoredLocalRenderResult> results = new();
 
@@ -141,10 +146,6 @@ internal sealed class AzureBlobRenderResultStore(RenderResultOptions options, Ti
         return new StoredRenderResult(id, blobClient.GenerateSasUri(sasBuilder).ToString(), expiresAt);
     }
 
-    public ValueTask<StoredRenderResultContent?> GetAsync(string id, CancellationToken cancellationToken)
-    {
-        return ValueTask.FromResult<StoredRenderResultContent?>(null);
-    }
 }
 
 internal static class RenderResultIds

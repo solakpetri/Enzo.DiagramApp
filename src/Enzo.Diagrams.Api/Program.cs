@@ -17,6 +17,15 @@ builder.Services.AddOptions<EnzoOptions>()
     .Validate(ValidateRenderResultOptions, "Enzo:RenderResults is invalid.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<EnzoOptions>>().Value.RenderResults;
+    var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
+
+    return new LocalRenderResultStore(options, timeProvider);
+});
+builder.Services.AddSingleton<ILocalRenderResultReader>(serviceProvider =>
+    serviceProvider.GetRequiredService<LocalRenderResultStore>());
 builder.Services.AddSingleton<IRenderResultStore>(serviceProvider =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<EnzoOptions>>().Value.RenderResults;
@@ -24,7 +33,7 @@ builder.Services.AddSingleton<IRenderResultStore>(serviceProvider =>
 
     return string.Equals(options.Store, "AzureBlob", StringComparison.OrdinalIgnoreCase)
         ? new AzureBlobRenderResultStore(options, timeProvider)
-        : new LocalRenderResultStore(options, timeProvider);
+        : serviceProvider.GetRequiredService<LocalRenderResultStore>();
 });
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -101,8 +110,7 @@ app.MapPost("/v1/render", async (
         ]);
     }
 
-    var delivery = string.IsNullOrWhiteSpace(request.Delivery) ? "raw" : request.Delivery;
-    if (!IsSupportedRenderDelivery(delivery))
+    if (!TryGetRenderDelivery(request.Delivery, out var delivery))
     {
         return InvalidRequestProblem("Only raw and url delivery are supported.", [
             new DiagramProblemError("request", null, null, "Delivery must be 'raw' or 'url'.", "unsupported_delivery")
@@ -232,10 +240,10 @@ app.MapPost("/v1/render", async (
 
 app.MapGet("/v1/render-results/{id}", async (
     string id,
-    IRenderResultStore renderResultStore,
+    ILocalRenderResultReader renderResultReader,
     CancellationToken cancellationToken) =>
 {
-    var result = await renderResultStore.GetAsync(id, cancellationToken);
+    var result = await renderResultReader.GetAsync(id, cancellationToken);
     return result is null
         ? Results.NotFound()
         : Results.File(result.Bytes, result.ContentType);
@@ -326,8 +334,15 @@ static bool IsSupportedRenderFormat(string format)
         || string.Equals(format, "png", StringComparison.OrdinalIgnoreCase);
 }
 
-static bool IsSupportedRenderDelivery(string delivery)
+static bool TryGetRenderDelivery(string? value, out string delivery)
 {
+    if (value is null)
+    {
+        delivery = "raw";
+        return true;
+    }
+
+    delivery = value.Trim();
     return string.Equals(delivery, "raw", StringComparison.OrdinalIgnoreCase)
         || string.Equals(delivery, "url", StringComparison.OrdinalIgnoreCase);
 }
@@ -352,8 +367,10 @@ static bool ValidateRenderResultOptions(EnzoOptions options)
 
 static Uri GetRequestBaseUri(HttpRequest request)
 {
-    var pathBase = request.PathBase.HasValue ? request.PathBase.Value!.Trim('/') + "/" : string.Empty;
-    return new Uri($"{request.Scheme}://{request.Host}/{pathBase}");
+    var pathBase = request.PathBase.ToString().Trim('/');
+    var basePath = string.IsNullOrEmpty(pathBase) ? "/" : $"/{pathBase}/";
+
+    return new Uri($"{request.Scheme}://{request.Host}{basePath}");
 }
 
 static IResult DiagramProblem(DiagramParseResult result)
