@@ -21,7 +21,22 @@ internal sealed record RenderDiagramRequest(
     [property: Required]
     [property: RegularExpression("^(svg|png)$")]
     [property: Description("Render format. Supported values are svg and png.")]
-    string Format);
+    string Format,
+    [property: RegularExpression("^(raw|url)$")]
+    [property: Description("Result delivery mode. Use raw for the rendered response body, or url for a temporary hosted PNG URL.")]
+    string? Delivery = null);
+
+internal sealed record HostedRenderDiagramResponse(
+    [property: Description("Opaque render identifier for the temporary hosted image.")]
+    string Id,
+    [property: Description("Render format. Hosted results currently support png.")]
+    string Format,
+    [property: Description("Hosted image content type.")]
+    string ContentType,
+    [property: Description("Short-lived read-only URL for the actual Enzo-rendered image.")]
+    string Url,
+    [property: Description("UTC timestamp when the hosted image URL expires.")]
+    DateTimeOffset ExpiresAt);
 
 internal sealed record DiagramProblemError(
     string Type,

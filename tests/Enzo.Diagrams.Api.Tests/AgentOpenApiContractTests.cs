@@ -27,9 +27,15 @@ public sealed class AgentOpenApiContractTests
         Assert.Equal("renderDiagram", renderPost.GetProperty("operationId").GetString());
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
+        AssertResponseContent(renderPost, "200", "application/json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
         AssertApiKeySecurityRequirement(renderPost);
+
+        var hostedResponse = root.GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("HostedRenderDiagramResponse");
+        Assert.Contains("actual Enzo-rendered PNG", hostedResponse.GetProperty("properties").GetProperty("url").GetProperty("description").GetString());
 
         var sourceSchema = root.GetProperty("components")
             .GetProperty("schemas")
@@ -73,6 +79,15 @@ public sealed class AgentOpenApiContractTests
         Assert.Equal("apiKey", scheme.GetProperty("type").GetString());
         Assert.Equal("header", scheme.GetProperty("in").GetString());
         Assert.Equal("X-API-Key", scheme.GetProperty("name").GetString());
+    }
+
+    private static void AssertResponseContent(JsonElement operation, string statusCode, string mediaType)
+    {
+        Assert.True(operation.GetProperty("responses")
+            .GetProperty(statusCode)
+            .GetProperty("content")
+            .GetProperty(mediaType)
+            .ValueKind == JsonValueKind.Object);
     }
 
     private static void AssertApiKeySecurityRequirement(JsonElement operation)

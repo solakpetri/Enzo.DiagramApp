@@ -40,4 +40,19 @@ internal sealed class EnzoOptions
     public const string SectionName = "Enzo";
 
     public string? ApiKey { get; init; }
+
+    public RenderResultOptions RenderResults { get; init; } = new();
+}
+
+internal sealed class RenderResultOptions
+{
+    public string Store { get; init; } = "Local";
+
+    public int UrlLifetimeMinutes { get; init; } = 30;
+
+    public string? BlobConnectionString { get; init; }
+
+    public string? BlobContainerName { get; init; }
+
+    public string LocalDirectory { get; init; } = Path.Combine(Path.GetTempPath(), "enzo-diagrams-render-results");
 }

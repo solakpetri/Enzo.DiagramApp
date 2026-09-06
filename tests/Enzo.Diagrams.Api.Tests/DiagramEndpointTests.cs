@@ -4,6 +4,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Enzo.Diagrams.Api.Tests;
@@ -71,6 +74,7 @@ public sealed class DiagramEndpointTests
         AssertResponseContent(validatePost, "400", "application/problem+json");
         AssertResponseContent(renderPost, "200", "image/svg+xml");
         AssertResponseContent(renderPost, "200", "image/png");
+        AssertResponseContent(renderPost, "200", "application/json");
         AssertResponseContent(renderPost, "400", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
@@ -80,7 +84,11 @@ public sealed class DiagramEndpointTests
         Assert.Contains(renderRequestSchema.GetProperty("required").EnumerateArray(), property => property.GetString() == "source");
         Assert.Contains(renderRequestSchema.GetProperty("required").EnumerateArray(), property => property.GetString() == "format");
         Assert.Equal("^(svg|png)$", renderRequestSchema.GetProperty("properties").GetProperty("format").GetProperty("pattern").GetString());
+        Assert.Equal("^(raw|url)$", renderRequestSchema.GetProperty("properties").GetProperty("delivery").GetProperty("pattern").GetString());
         Assert.Equal("binary", GetResponseContent(renderPost, "200", "image/png").GetProperty("schema").GetProperty("format").GetString());
+        Assert.Contains(
+            "actual generated diagram image",
+            GetResponseContent(renderPost, "200", "application/json").GetProperty("schema").GetProperty("description").GetString());
     }
 
     [Fact]
@@ -255,6 +263,148 @@ public sealed class DiagramEndpointTests
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
         var png = await response.Content.ReadAsByteArrayAsync();
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Theory]
+    [InlineData(ValidSource)]
+    [InlineData(ValidSequenceSource)]
+    [InlineData(ValidBpmnSource)]
+    public async Task Render_HostedPngDelivery_ReturnsTemporaryImageUrl(string source)
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source,
+            format = "png",
+            delivery = "url"
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        var root = json.RootElement;
+
+        Assert.Equal("png", root.GetProperty("format").GetString());
+        Assert.Equal("image/png", root.GetProperty("contentType").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("id").GetString()));
+        Assert.True(root.GetProperty("expiresAt").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+
+        var imageResponse = await client.GetAsync(root.GetProperty("url").GetString());
+        imageResponse.EnsureSuccessStatusCode();
+        Assert.Equal("image/png", imageResponse.Content.Headers.ContentType?.MediaType);
+        var png = await imageResponse.Content.ReadAsByteArrayAsync();
+        Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
+    public async Task Render_HostedPngDelivery_PassesRenderedBytesToStorage()
+    {
+        var store = new CapturingRenderResultStore();
+        await using var factory = CreateFactory(store);
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png",
+            delivery = "url"
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.NotNull(store.Bytes);
+        Assert.NotEmpty(store.Bytes);
+        Assert.True(store.Bytes.Take(PngSignature.Length).SequenceEqual(PngSignature));
+        Assert.Equal("image/png", store.ContentType);
+        Assert.Equal(TimeSpan.FromMinutes(30), store.Lifetime);
+        Assert.NotNull(store.RequestBaseUri);
+    }
+
+    [Fact]
+    public async Task Render_StorageFailure_ReturnsSanitizedProblemDetails()
+    {
+        const string secret = "DefaultEndpointsProtocol=https;AccountKey=secret-account-key";
+        await using var factory = CreateFactory(new FailingRenderResultStore(secret));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png",
+            delivery = "url"
+        });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Hosted render storage is unavailable.", body);
+        Assert.DoesNotContain(secret, body);
+        Assert.DoesNotContain("AccountKey", body);
+    }
+
+    [Fact]
+    public async Task Render_SvgUrlDelivery_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "svg",
+            delivery = "url"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "unsupported_delivery_format");
+    }
+
+    [Fact]
+    public async Task Render_BlankDelivery_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png",
+            delivery = " "
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "unsupported_delivery");
+    }
+
+    [Fact]
+    public void RenderResultIds_AreOpaqueAndNonSequential()
+    {
+        var first = RenderResultIds.Create();
+        var second = RenderResultIds.Create();
+
+        Assert.Matches("^[a-f0-9]{32}$", first);
+        Assert.Matches("^[a-f0-9]{32}$", second);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void InvalidAzureBlobStorageConfiguration_FailsClearlyWithoutSecrets()
+    {
+        using var factory = CreateFactory(("Enzo:RenderResults:Store", "AzureBlob"));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("Enzo:RenderResults is invalid.", exception.Message);
+        Assert.DoesNotContain("ConnectionString", exception.Message);
+        Assert.DoesNotContain("AccountKey", exception.Message);
     }
 
     [Fact]
@@ -455,10 +605,78 @@ public sealed class DiagramEndpointTests
             .WithWebHostBuilder(builder => builder.UseSetting("Enzo:ApiKey", ApiKey));
     }
 
+    private static WebApplicationFactory<global::Program> CreateFactory(IRenderResultStore store)
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<IRenderResultStore>();
+                    services.AddSingleton(store);
+                });
+            });
+    }
+
+    private static WebApplicationFactory<global::Program> CreateFactory(params (string Key, string Value)[] settings)
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                foreach (var (key, value) in settings)
+                {
+                    builder.UseSetting(key, value);
+                }
+            });
+    }
+
     private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory)
     {
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
         return client;
+    }
+
+    private sealed class CapturingRenderResultStore : IRenderResultStore
+    {
+        public byte[] Bytes { get; private set; } = [];
+
+        public string? ContentType { get; private set; }
+
+        public TimeSpan Lifetime { get; private set; }
+
+        public Uri? RequestBaseUri { get; private set; }
+
+        public ValueTask<StoredRenderResult> StoreAsync(
+            byte[] bytes,
+            string contentType,
+            TimeSpan lifetime,
+            Uri requestBaseUri,
+            CancellationToken cancellationToken)
+        {
+            Bytes = bytes;
+            ContentType = contentType;
+            Lifetime = lifetime;
+            RequestBaseUri = requestBaseUri;
+            return ValueTask.FromResult(new StoredRenderResult(
+                RenderResultIds.Create(),
+                "https://storage.example.invalid/render-results/test.png?sv=redacted",
+                DateTimeOffset.UtcNow.Add(lifetime)));
+        }
+    }
+
+    private sealed class FailingRenderResultStore(string message) : IRenderResultStore
+    {
+        public ValueTask<StoredRenderResult> StoreAsync(
+            byte[] bytes,
+            string contentType,
+            TimeSpan lifetime,
+            Uri requestBaseUri,
+            CancellationToken cancellationToken)
+        {
+            throw new RenderResultStoreException(message);
+        }
     }
 }
