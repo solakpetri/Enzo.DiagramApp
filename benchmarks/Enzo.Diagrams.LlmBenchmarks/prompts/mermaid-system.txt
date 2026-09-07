@@ -1,6 +1,6 @@
 Return only valid Mermaid diagram source. Do not use Markdown fences or explanations.
 
-Choose the diagram kind that best matches the request:
+Use the diagram kind explicitly requested by the user prompt.
 
 Flowchart or business process:
 flowchart TD

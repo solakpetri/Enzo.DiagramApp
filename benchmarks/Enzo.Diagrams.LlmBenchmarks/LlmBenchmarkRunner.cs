@@ -11,6 +11,11 @@ public sealed class LlmBenchmarkRunner(
     public async Task<LlmBenchmarkRun> RunAsync(string scenariosDirectory, BenchmarkOptions options, CancellationToken cancellationToken)
     {
         var run = writer.LoadOrCreate(options);
+        if (run.Metadata.PromptAudit is null)
+        {
+            run = run with { Metadata = run.Metadata with { PromptAudit = prompts.CreateAudit() } };
+        }
+
         var settings = new ModelSettings(options.Model, options.Temperature, options.TopP, options.MaxOutputTokens);
         var scenarios = ScenarioLoader.Load(scenariosDirectory)
             .Where(s => options.ScenarioFilter is null || s.Id.Equals(options.ScenarioFilter, StringComparison.OrdinalIgnoreCase))
@@ -37,25 +42,32 @@ public sealed class LlmBenchmarkRunner(
     private async Task<LlmRunResult> RunOneAsync(DiagramScenario scenario, string language, int runNumber, ModelSettings settings, int maxRepairAttempts, CancellationToken cancellationToken)
     {
         var attempts = new List<GenerationAttempt>();
+        string? repairStoppedReason = null;
         try
         {
             var systemPrompt = prompts.GetPrompt(language);
-            attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, scenario.Prompt, settings, 0, false, cancellationToken));
-            for (var repair = 1; attempts.Last().Valid is false && repair <= maxRepairAttempts; repair++)
+            attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, GenerationPromptBuilder.BuildUserPrompt(scenario, language), settings, 0, false, null, cancellationToken));
+            for (var repair = 1; attempts.Last().EquivalentValid is false && repair <= maxRepairAttempts; repair++)
             {
-                var userPrompt = RepairPrompt(attempts.Last().NormalizedSource, attempts.Last().ValidationError);
-                attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, userPrompt, settings, repair, true, cancellationToken));
+                var repairType = GenerationPromptBuilder.RepairTypeFor(attempts.Last());
+                var userPrompt = GenerationPromptBuilder.BuildRepairPrompt(language, attempts.Last());
+                attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, userPrompt, settings, repair, true, repairType, cancellationToken));
+                repairStoppedReason = DetectRepairStagnation(attempts);
+                if (repairStoppedReason is not null)
+                {
+                    break;
+                }
             }
 
-            return Result(scenario, language, settings.Model, runNumber, attempts, attempts.Last().Valid ? null : "validation");
+            return Result(scenario, language, settings.Model, runNumber, attempts, attempts.Last().EquivalentValid ? null : repairStoppedReason ?? "validation", repairStoppedReason);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
         {
-            return Result(scenario, language, settings.Model, runNumber, attempts, "api");
+            return Result(scenario, language, settings.Model, runNumber, attempts, "api", repairStoppedReason);
         }
     }
 
-    private async Task<GenerationAttempt> GenerateAttemptAsync(DiagramScenario scenario, string language, string systemPrompt, string userPrompt, ModelSettings settings, int attemptNumber, bool isRepair, CancellationToken cancellationToken)
+    private async Task<GenerationAttempt> GenerateAttemptAsync(DiagramScenario scenario, string language, string systemPrompt, string userPrompt, ModelSettings settings, int attemptNumber, bool isRepair, string? repairType, CancellationToken cancellationToken)
     {
         var response = await modelClient.CompleteAsync(systemPrompt, userPrompt, settings, cancellationToken);
         var normalized = SourceNormalizer.RemoveMarkdownFence(response.Source);
@@ -81,14 +93,27 @@ public sealed class LlmBenchmarkRunner(
             semantic.SemanticValid,
             semantic.EquivalentValid,
             semantic.FailureReasons,
-            semantic.Diagnostics);
+            semantic.Diagnostics,
+            repairType);
     }
 
-    private static string RepairPrompt(string source, string? error) =>
-        $"The diagram source below is invalid. Correct it and return only the corrected diagram source.\n\nValidation error:\n{error}\n\nInvalid source:\n{source}";
+    private static string? DetectRepairStagnation(IReadOnlyList<GenerationAttempt> attempts)
+    {
+        if (attempts.Count < 2)
+        {
+            return null;
+        }
 
-    private static LlmRunResult Result(DiagramScenario scenario, string language, string model, int runNumber, IReadOnlyList<GenerationAttempt> attempts, string? errorCategory) =>
-        new(scenario.Id, scenario.Category, scenario.Complexity, language, model, runNumber, attempts, errorCategory);
+        if (attempts[^1].NormalizedSource == attempts[^2].NormalizedSource)
+        {
+            return "identical-output";
+        }
+
+        return attempts.Count >= 3 && attempts[^1].NormalizedSource == attempts[^3].NormalizedSource ? "repair-oscillation" : null;
+    }
+
+    private static LlmRunResult Result(DiagramScenario scenario, string language, string model, int runNumber, IReadOnlyList<GenerationAttempt> attempts, string? errorCategory, string? repairStoppedReason) =>
+        new(scenario.Id, scenario.Category, scenario.Complexity, language, model, runNumber, attempts, errorCategory) { RepairStoppedReason = repairStoppedReason };
 
     private static IReadOnlyList<string> Languages(string filter) => filter switch
     {
