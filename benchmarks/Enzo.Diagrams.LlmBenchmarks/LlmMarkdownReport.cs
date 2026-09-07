@@ -21,7 +21,7 @@ public static class LlmMarkdownReport
             {SummaryTable(run, enzo, mermaid)}
 
             Overall TTV: {LlmMetrics.Direction(LlmMetrics.Difference(enzo.AverageTokensToValidDiagram, mermaid.AverageTokensToValidDiagram))}
-            Overall successful-run TTVED: {LlmMetrics.EquivalentDirection(enzo.AverageTokensToValidEquivalentDiagram, mermaid.AverageTokensToValidEquivalentDiagram)}
+            Overall successful-run TTVED: {LlmMetrics.EquivalentDirection(enzo.AverageTokensToValidEquivalentDiagram, mermaid.AverageTokensToValidEquivalentDiagram, enzo.EquivalentSuccessPercent, mermaid.EquivalentSuccessPercent)}
 
             ## Tokens To Valid Diagram
 
@@ -41,6 +41,21 @@ public static class LlmMarkdownReport
             | Median successful TTVED | {NullableNumber(enzo.MedianTokensToValidEquivalentDiagram)} | {NullableNumber(mermaid.MedianTokensToValidEquivalentDiagram)} |
             | Min successful TTVED | {NullableNumber(enzo.MinimumTokensToValidEquivalentDiagram)} | {NullableNumber(mermaid.MinimumTokensToValidEquivalentDiagram)} |
             | Max successful TTVED | {NullableNumber(enzo.MaximumTokensToValidEquivalentDiagram)} | {NullableNumber(mermaid.MaximumTokensToValidEquivalentDiagram)} |
+            | Equivalent unresolved count | {enzo.EquivalentUnresolvedCount} | {mermaid.EquivalentUnresolvedCount} |
+            | Equivalent failure rate | {Number(enzo.EquivalentFailureRatePercent)}% | {Number(mermaid.EquivalentFailureRatePercent)}% |
+
+            ## Repair Diagnostics
+
+            | Metric | Enzo | Mermaid |
+            | --- | ---: | ---: |
+            | Avg semantic repair attempts | {Number(enzo.AverageSemanticRepairAttempts)} | {Number(mermaid.AverageSemanticRepairAttempts)} |
+            | Avg semantic repair input tokens | {Number(enzo.AverageSemanticRepairInputTokens)} | {Number(mermaid.AverageSemanticRepairInputTokens)} |
+            | Avg semantic repair output tokens | {Number(enzo.AverageSemanticRepairOutputTokens)} | {Number(mermaid.AverageSemanticRepairOutputTokens)} |
+            | Runs repaired from kind failure | {enzo.RunsRepairedFromKindFailure} | {mermaid.RunsRepairedFromKindFailure} |
+            | Runs repaired from structural failure | {enzo.RunsRepairedFromStructuralFailure} | {mermaid.RunsRepairedFromStructuralFailure} |
+            | Runs repaired from semantic concept failure | {enzo.RunsRepairedFromSemanticConceptFailure} | {mermaid.RunsRepairedFromSemanticConceptFailure} |
+            | Runs unresolved after repair | {enzo.RunsUnresolvedAfterRepair} | {mermaid.RunsUnresolvedAfterRepair} |
+            | Runs stopped due to stagnation | {enzo.RunsStoppedDueToStagnation} | {mermaid.RunsStoppedDueToStagnation} |
 
             ## By Category
 
@@ -62,6 +77,7 @@ public static class LlmMarkdownReport
             | Metric | Enzo | Mermaid |
             | --- | ---: | ---: |
             | Avg initial input tokens | {Number(enzo.AverageInitialInputTokens)} | {Number(mermaid.AverageInitialInputTokens)} |
+            | Initial input-token difference | {Number(enzo.AverageInitialInputTokens - mermaid.AverageInitialInputTokens)} | {Number(mermaid.AverageInitialInputTokens - enzo.AverageInitialInputTokens)} |
             | Avg generation-only tokens to valid | {Number(enzo.AverageGenerationOnlyTokensToValidDiagram)} | {Number(mermaid.AverageGenerationOnlyTokensToValidDiagram)} |
             | Avg repair output tokens | {Number(enzo.AverageRepairOutputTokens)} | {Number(mermaid.AverageRepairOutputTokens)} |
 
@@ -74,12 +90,15 @@ public static class LlmMarkdownReport
         "| --- | ---: | ---: |",
         Row("First-pass valid", $"{Number(enzo.FirstPassValidityPercent)}%", $"{Number(mermaid.FirstPassValidityPercent)}%"),
         Row("Eventual valid", $"{Number(enzo.EventualSuccessPercent)}%", $"{Number(mermaid.EventualSuccessPercent)}%"),
+        Row("First-pass equivalent-valid", $"{Number(enzo.FirstPassEquivalentSuccessPercent)}%", $"{Number(mermaid.FirstPassEquivalentSuccessPercent)}%"),
+        Row("Eventual equivalent-valid", $"{Number(enzo.EquivalentSuccessPercent)}%", $"{Number(mermaid.EquivalentSuccessPercent)}%"),
         Row("Syntax-valid", $"{Number(Percent(run, DiagramLanguages.Enzo, r => r.SyntaxValid, enzo.Runs))}%", $"{Number(Percent(run, DiagramLanguages.Mermaid, r => r.SyntaxValid, mermaid.Runs))}%"),
         Row("Render-valid", $"{Number(Percent(run, DiagramLanguages.Enzo, r => r.RenderValid, enzo.Runs))}%", $"{Number(Percent(run, DiagramLanguages.Mermaid, r => r.RenderValid, mermaid.Runs))}%"),
         Row("Kind-valid", $"{Number(Percent(run, DiagramLanguages.Enzo, r => r.KindValid, enzo.Runs))}%", $"{Number(Percent(run, DiagramLanguages.Mermaid, r => r.KindValid, mermaid.Runs))}%"),
         Row("Structurally complete", $"{Number(Percent(run, DiagramLanguages.Enzo, r => r.StructureValid, enzo.Runs))}%", $"{Number(Percent(run, DiagramLanguages.Mermaid, r => r.StructureValid, mermaid.Runs))}%"),
         Row("Semantically complete", $"{Number(Percent(run, DiagramLanguages.Enzo, r => r.SemanticValid, enzo.Runs))}%", $"{Number(Percent(run, DiagramLanguages.Mermaid, r => r.SemanticValid, mermaid.Runs))}%"),
-        Row("Equivalent-valid", $"{Number(enzo.EquivalentSuccessPercent)}%", $"{Number(mermaid.EquivalentSuccessPercent)}%"),
+        Row("Equivalent unresolved count", enzo.EquivalentUnresolvedCount.ToString(CultureInfo.InvariantCulture), mermaid.EquivalentUnresolvedCount.ToString(CultureInfo.InvariantCulture)),
+        Row("Equivalent failure rate", $"{Number(enzo.EquivalentFailureRatePercent)}%", $"{Number(mermaid.EquivalentFailureRatePercent)}%"),
         Row("Avg output tokens", Number(enzo.AverageOutputTokens), Number(mermaid.AverageOutputTokens)),
         Row("Avg repair tokens", Number(enzo.TotalRepairTokens / Math.Max(enzo.Runs, 1.0)), Number(mermaid.TotalRepairTokens / Math.Max(mermaid.Runs, 1.0))),
         Row("Avg tokens to valid diagram", Number(enzo.AverageTokensToValidDiagram), Number(mermaid.AverageTokensToValidDiagram)),
@@ -92,9 +111,9 @@ public static class LlmMarkdownReport
         {
             var enzo = LlmMetrics.Aggregate(DiagramLanguages.Enzo, group);
             var mermaid = LlmMetrics.Aggregate(DiagramLanguages.Mermaid, group);
-            return $"| {group.Key} | {enzo.Runs} | {mermaid.Runs} | {Number(enzo.AverageTokensToValidDiagram)} | {Number(mermaid.AverageTokensToValidDiagram)} | {LlmMetrics.Direction(LlmMetrics.Difference(enzo.AverageTokensToValidDiagram, mermaid.AverageTokensToValidDiagram))} |";
+            return $"| {group.Key} | {enzo.Runs} | {mermaid.Runs} | {Number(enzo.EquivalentSuccessPercent)}% | {Number(mermaid.EquivalentSuccessPercent)}% | {Number(enzo.AverageTokensToValidDiagram)} | {Number(mermaid.AverageTokensToValidDiagram)} | {NullableNumber(enzo.AverageTokensToValidEquivalentDiagram)} | {NullableNumber(mermaid.AverageTokensToValidEquivalentDiagram)} |";
         });
-        return string.Join(Environment.NewLine, ["| Group | Enzo runs | Mermaid runs | Enzo avg tokens to valid | Mermaid avg tokens to valid | Difference |", "| --- | ---: | ---: | ---: | ---: | --- |", .. rows]);
+        return string.Join(Environment.NewLine, ["| Group | Enzo runs | Mermaid runs | Enzo eventual equivalent | Mermaid eventual equivalent | Enzo avg TTV | Mermaid avg TTV | Enzo avg successful TTVED | Mermaid avg successful TTVED |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |", .. rows]);
     }
 
     private static string EquivalentBreakdown(LlmBenchmarkRun run)

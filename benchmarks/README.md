@@ -102,17 +102,19 @@ It reuses the exact 30 scenarios under `benchmarks/scenarios`. It does not rewri
 
 For each scenario, the runner independently asks the same model to generate Enzo.Diagrams DSL and Mermaid source using fixed generation settings. Defaults are 30 scenarios, 5 Enzo runs per scenario, and 5 Mermaid runs per scenario, for 300 generations.
 
-Each initial generation records prompt/input tokens, output tokens, total tokens, duration, first-pass validity, Markdown fence normalization, and validation/render result. If the output is invalid, the runner asks the same model to repair the diagram using the invalid source and validation error. Repair attempts are capped by `--max-repair-attempts`, defaulting to 3.
+Each initial generation records prompt/input tokens, output tokens, total tokens, duration, first-pass validity, Markdown fence normalization, validation/render result, and semantic-equivalence result. If the output fails syntax, render, kind, structure, or required-concept checks, the runner asks the same model to repair the diagram using concise failure feedback. Repair attempts are capped by `--max-repair-attempts`, defaulting to 3.
 
 Valid Diagram is defined as a diagram that parses/validates and renders successfully.
 
-Tokens to Valid Diagram is defined as:
+Tokens to Valid Diagram is the token total through the first syntax/render-valid attempt and remains a diagnostic metric.
+
+Tokens to Valid Equivalent Diagram is the primary metric and is defined as:
 
 ```text
-initial input tokens + initial output tokens + all repair input tokens + all repair output tokens
+initial input tokens + initial output tokens + repair input tokens + repair output tokens through the first equivalent-valid attempt
 ```
 
-Repair prompt context is included. Cold-start input token cost is reported separately because Enzo requires DSL guidance and Mermaid may already be familiar to the model. Generation-only output/repair tokens are also reported, but they are not total API cost.
+Repair prompt context is included, including semantic repair calls. Cold-start input token cost is reported separately because Enzo requires DSL guidance and Mermaid may already be familiar to the model. Generation-only output/repair tokens are also reported, but they are not total API cost.
 
 Valid Equivalent Diagram is defined as a Valid Diagram that also uses the expected benchmark kind, contains required scenario concepts, and meets minimum structural expectations. Tokens to Valid Equivalent Diagram is the token total through the first equivalent-valid attempt. If no attempt reaches equivalence, TTVED is reported as unresolved rather than assigning a fabricated finite value.
 
@@ -140,7 +142,9 @@ Concept matching normalizes labels and identifiers by lowercasing, splitting com
 
 ### Fairness Rules
 
-Both languages receive the same natural-language scenario, model, temperature, top-p, and output token limit. Prompts are stored in `benchmarks/Enzo.Diagrams.LlmBenchmarks/prompts` for auditing. The prompts do not mention the comparison, benchmark results, or token-count optimization.
+Both languages receive the same natural-language scenario, the same language-neutral semantic contract derived from scenario expectations, model, temperature, top-p, and output token limit. Prompts are stored in `benchmarks/Enzo.Diagrams.LlmBenchmarks/prompts` and prompt audit metadata is persisted in JSON results. The prompts do not mention the comparison, benchmark results, or token-count optimization.
+
+The detailed equivalent-generation method is documented in `benchmarks/results/llm-generation-cost/EQUIVALENT_GENERATION_METHOD.md`.
 
 Do not exclude failed Enzo runs, successful Mermaid runs, or categories where Mermaid wins. Do not manually edit generated benchmark results.
 
@@ -185,9 +189,10 @@ dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --runs 1 --catego
 dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --scenario flow-login-basic --model gpt-4o-mini
 ```
 
-Manual one-run baseline after reviewing offline re-evaluation:
+Manual one-run equivalent-generation benchmark:
 
 ```powershell
+$env:OPENAI_API_KEY = "your-openai-api-key"
 dotnet run --project benchmarks/Enzo.Diagrams.LlmBenchmarks -- --runs 1 --language all
 ```
 
