@@ -13,4 +13,12 @@ public sealed class PromptStore(string promptsDirectory)
 
         return File.ReadAllText(Path.Combine(promptsDirectory, fileName));
     }
+
+    public PromptAudit CreateAudit() => new(
+        GetPrompt(DiagramLanguages.Enzo),
+        GetPrompt(DiagramLanguages.Mermaid),
+        GenerationPromptBuilder.SharedSemanticTaskTemplate,
+        GenerationPromptBuilder.EnzoLanguageSpecificAdditions,
+        GenerationPromptBuilder.MermaidLanguageSpecificAdditions,
+        LlmMetrics.EquivalentCostComparisonThresholdPercent);
 }

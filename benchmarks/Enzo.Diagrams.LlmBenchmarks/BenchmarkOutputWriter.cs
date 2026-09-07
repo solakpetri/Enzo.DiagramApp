@@ -52,13 +52,13 @@ public sealed class BenchmarkOutputWriter
         var rows = run.Results.OrderBy(r => r.ScenarioId).ThenBy(r => r.Language).ThenBy(r => r.RunNumber).Select(r => string.Join(',', [
             Csv(r.ScenarioId), r.Category, r.Complexity, r.Language, Csv(r.Model), r.RunNumber.ToString(CultureInfo.InvariantCulture),
             r.InputTokens.ToString(CultureInfo.InvariantCulture), r.OutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalTokens.ToString(CultureInfo.InvariantCulture),
-            r.FirstPassValid.ToString(), r.RepairAttempts.ToString(CultureInfo.InvariantCulture), r.RepairInputTokens.ToString(CultureInfo.InvariantCulture),
+            r.FirstPassValid.ToString(), r.FirstPassEquivalentValid.ToString(), r.RepairAttempts.ToString(CultureInfo.InvariantCulture), r.RepairInputTokens.ToString(CultureInfo.InvariantCulture),
             r.RepairOutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalRepairTokens.ToString(CultureInfo.InvariantCulture),
             r.TokensToValidDiagram.ToString(CultureInfo.InvariantCulture), Csv(r.TokensToValidEquivalentDiagram?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
             r.SyntaxValid.ToString(), r.RenderSuccess.ToString(), r.RenderValid.ToString(), r.KindValid.ToString(), r.StructureValid.ToString(), r.SemanticValid.ToString(), r.EquivalentValid.ToString(),
-            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
+            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairType).Where(t => t is not null))), Csv(r.RepairStoppedReason ?? string.Empty), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
 
-        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,failureReasons,errorCategory", .. rows]);
+        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,firstPassEquivalentValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,repairTypes,repairStoppedReason,failureReasons,errorCategory", .. rows]);
     }
 
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
