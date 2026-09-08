@@ -80,7 +80,8 @@ public sealed class LlmBenchmarkTests
         var jsonPath = Directory.EnumerateFiles(output, "*.json").Single();
         var serialized = System.Text.Json.JsonSerializer.Deserialize<LlmBenchmarkRun>(File.ReadAllText(jsonPath), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         Assert.Equal(result.TokensToValidDiagram, Assert.Single(serialized!.Results).TokensToValidDiagram);
-        Assert.Single(Directory.EnumerateFiles(output, "*.csv"));
+        var csvPath = Assert.Single(Directory.EnumerateFiles(output, "*.csv"));
+        Assert.Contains("repairFailureCategories,repairSuccesses,repairsIntroducedSyntaxFailure", File.ReadAllText(csvPath));
         Assert.Single(Directory.EnumerateFiles(output, "*.md"));
     }
 
@@ -144,6 +145,8 @@ public sealed class LlmBenchmarkTests
 
         Assert.True(result.EquivalentValid);
         Assert.Equal("Semantic", result.Attempts[1].RepairType);
+        Assert.Equal(EnzoRepairFailureCategories.MissingConcept, result.Attempts[1].RepairFailureCategory);
+        Assert.True(result.Attempts[1].RepairSuccessful);
         Assert.Contains("Missing required concept: dashboard.", client.UserPrompts[1]);
         Assert.DoesNotContain("Expected at least 6 nodes", client.UserPrompts[1]);
         Assert.Equal(27, result.TokensToValidEquivalentDiagram);
@@ -183,23 +186,51 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
-    public async Task RunAsync_IdenticalRepairOutputStopsEarly()
+    public async Task RunAsync_IdenticalRepairGetsOneEscalatedChance()
     {
         var output = TempDirectory();
         var repeated = MissingDashboardFlowSource("1");
         var client = new FakeClient(new Queue<ModelResponse>([
             new ModelResponse(repeated, new TokenUsage(10, 5, 15), TimeSpan.Zero),
-            new ModelResponse(repeated, new TokenUsage(8, 4, 12), TimeSpan.Zero)]));
+            new ModelResponse(repeated, new TokenUsage(8, 4, 12), TimeSpan.Zero),
+            new ModelResponse(ValidFlowSource(), new TokenUsage(7, 3, 10), TimeSpan.Zero)]));
 
-        var result = Assert.Single((await Runner(client, AlwaysValid(2), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
+        var result = Assert.Single((await Runner(client, AlwaysValid(3), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
 
-        Assert.False(result.EquivalentValid);
-        Assert.Equal(2, client.Calls);
-        Assert.Equal("identical-output", result.RepairStoppedReason);
+        Assert.True(result.EquivalentValid);
+        Assert.Equal(3, client.Calls);
+        Assert.Null(result.RepairStoppedReason);
+        Assert.Contains("previous repair did not change", client.UserPrompts[2]);
+        Assert.Contains("You must modify the source", client.UserPrompts[2]);
+        Assert.Contains("Flowchart:", client.SystemPrompts[0]);
+        Assert.DoesNotContain("Flowchart:", client.SystemPrompts[1]);
     }
 
     [Fact]
-    public async Task RunAsync_OscillationStopsBeforeBudgetExhaustion()
+    public async Task RunAsync_RepeatedIdenticalRepairStopsAfterEscalation()
+    {
+        var output = TempDirectory();
+        var repeated = MissingDashboardFlowSource("1");
+        var client = new FakeClient(new Queue<ModelResponse>([
+            new ModelResponse(repeated, new TokenUsage(10, 5, 15), TimeSpan.Zero),
+            new ModelResponse(repeated, new TokenUsage(8, 4, 12), TimeSpan.Zero),
+            new ModelResponse(repeated, new TokenUsage(7, 3, 10), TimeSpan.Zero)]));
+
+        var result = Assert.Single((await Runner(client, AlwaysValid(3), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
+
+        Assert.False(result.EquivalentValid);
+        Assert.Equal(3, client.Calls);
+        Assert.Equal("identical-output", result.RepairStoppedReason);
+        Assert.Equal(15, result.RepairInputTokens);
+        Assert.Equal(7, result.RepairOutputTokens);
+        Assert.Equal(22, result.TotalRepairTokens);
+        Assert.Equal(37, result.Attempts.Sum(attempt => attempt.InputTokens + attempt.OutputTokens));
+        Assert.Equal(15, result.TokensToValidDiagram);
+        Assert.Equal(2, LlmMetrics.Aggregate(DiagramLanguages.Enzo, [result]).IdenticalOutputRepairs);
+    }
+
+    [Fact]
+    public async Task RunAsync_OscillationUsesOneFocusedFinalAttempt()
     {
         var output = TempDirectory();
         var sourceA = MissingDashboardFlowSource("1");
@@ -207,13 +238,57 @@ public sealed class LlmBenchmarkTests
         var client = new FakeClient(new Queue<ModelResponse>([
             new ModelResponse(sourceA, new TokenUsage(10, 5, 15), TimeSpan.Zero),
             new ModelResponse(sourceB, new TokenUsage(8, 4, 12), TimeSpan.Zero),
-            new ModelResponse(sourceA, new TokenUsage(7, 4, 11), TimeSpan.Zero)]));
+            new ModelResponse(sourceA, new TokenUsage(7, 4, 11), TimeSpan.Zero),
+            new ModelResponse(MissingDashboardFlowSource("3"), new TokenUsage(6, 3, 9), TimeSpan.Zero)]));
 
-        var result = Assert.Single((await Runner(client, AlwaysValid(3), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
+        var result = Assert.Single((await Runner(client, AlwaysValid(4), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
 
         Assert.False(result.EquivalentValid);
-        Assert.Equal(3, client.Calls);
+        Assert.Equal(4, client.Calls);
         Assert.Equal("repair-oscillation", result.RepairStoppedReason);
+        Assert.Contains("alternate between invalid forms", client.UserPrompts[3]);
+        Assert.Contains("Required condition:", client.UserPrompts[3]);
+        Assert.Equal(1, LlmMetrics.Aggregate(DiagramLanguages.Enzo, [result]).OscillationRepairs);
+    }
+
+    [Fact]
+    public async Task RunAsync_MermaidIdenticalRepairStillStopsImmediately()
+    {
+        var output = TempDirectory();
+        const string source = "flowchart TD\nA[Credentials]\nB[Done]\nA --> B";
+        var client = new FakeClient(new Queue<ModelResponse>([
+            new ModelResponse(source, new TokenUsage(10, 5, 15), TimeSpan.Zero),
+            new ModelResponse(source, new TokenUsage(8, 4, 12), TimeSpan.Zero)]));
+
+        var result = Assert.Single((await Runner(client, AlwaysValid(2), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Mermaid), CancellationToken.None)).Results);
+
+        Assert.Equal(2, client.Calls);
+        Assert.Equal("identical-output", result.RepairStoppedReason);
+        Assert.Contains("The diagram source does not satisfy the request", client.UserPrompts[1]);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsSyntaxRegressionAndRepairOutcome()
+    {
+        var output = TempDirectory();
+        var client = new FakeClient(new Queue<ModelResponse>([
+            new ModelResponse(StructurallyShortFlowSource(), new TokenUsage(10, 5, 15), TimeSpan.Zero),
+            new ModelResponse("bad", new TokenUsage(8, 4, 12), TimeSpan.Zero),
+            new ModelResponse(ValidFlowSource(), new TokenUsage(7, 3, 10), TimeSpan.Zero)]));
+
+        var result = Assert.Single((await Runner(client, new SequenceValidator(new Queue<bool>([true, false, true])), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None)).Results);
+
+        Assert.True(result.EquivalentValid);
+        Assert.True(result.Attempts[1].IntroducedSyntaxFailure);
+        Assert.False(result.Attempts[1].RepairSuccessful);
+        Assert.Equal(EnzoRepairFailureCategories.Syntax, result.Attempts[2].RepairFailureCategory);
+        Assert.True(result.Attempts[2].RepairSuccessful);
+        var aggregate = LlmMetrics.Aggregate(DiagramLanguages.Enzo, [result]);
+        Assert.Equal(2, aggregate.RepairAttemptsStarted);
+        Assert.Equal(15, aggregate.AverageRepairInputTokens);
+        Assert.Equal(50, aggregate.RepairSuccessRatePercent);
+        Assert.Equal(1, aggregate.RepairsResolvedSyntax);
+        Assert.Equal(1, aggregate.RepairsIntroducedSyntaxFailure);
     }
 
     [Fact]
@@ -257,6 +332,9 @@ public sealed class LlmBenchmarkTests
         Assert.Contains("# Enzo vs Mermaid - LLM Generation Benchmark", report);
         Assert.Contains("Avg tokens to valid diagram", report);
         Assert.Contains("Avg successful tokens to valid equivalent diagram", report);
+        Assert.Contains("Avg repair input tokens", report);
+        Assert.Contains("Enzo Repair Convergence", report);
+        Assert.Contains("Repairs that introduced new syntax failure", report);
         Assert.Contains("Equivalent By Category", report);
         Assert.Contains("Cold start includes", report);
         Assert.Contains("| flow |", report);
@@ -375,11 +453,13 @@ public sealed class LlmBenchmarkTests
     private sealed class FakeClient(Queue<ModelResponse> responses) : IDiagramModelClient
     {
         public int Calls { get; private set; }
+        public List<string> SystemPrompts { get; } = [];
         public List<string> UserPrompts { get; } = [];
 
         public Task<ModelResponse> CompleteAsync(string systemPrompt, string userPrompt, ModelSettings settings, CancellationToken cancellationToken)
         {
             Calls++;
+            SystemPrompts.Add(systemPrompt);
             UserPrompts.Add(userPrompt);
             return Task.FromResult(responses.Dequeue());
         }
