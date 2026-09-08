@@ -31,6 +31,11 @@ public static class GenerationPromptBuilder
     public static string BuildUserPrompt(DiagramScenario scenario, string language)
     {
         var contract = GenerationContract.From(scenario);
+        if (language == DiagramLanguages.Enzo && (contract.ExpectedKind == "flow" || contract.ExpectedKind == "process"))
+        {
+            return BuildEnzoFlowProcessUserPrompt(scenario, contract);
+        }
+
         var builder = new StringBuilder();
         builder.AppendLine($"Create a {contract.ExpectedKind} diagram for this request:");
         builder.AppendLine();
@@ -115,13 +120,43 @@ public static class GenerationPromptBuilder
     public static string LanguageKindInstruction(string language, string? expectedKind) => (language, expectedKind) switch
     {
         (DiagramLanguages.Enzo, "sequence") => "Use Enzo `sequence` syntax, not `flow` or `bpmn`.",
-        (DiagramLanguages.Enzo, "flow") => "Use Enzo `flow` syntax, not `sequence` or `bpmn`.",
-        (DiagramLanguages.Enzo, "process") => "Use Enzo `bpmn` syntax, not `flow` or `sequence`.",
+        (DiagramLanguages.Enzo, "flow") => EnzoFlowGuidance,
+        (DiagramLanguages.Enzo, "process") => EnzoProcessGuidance,
         (DiagramLanguages.Mermaid, "sequence") => "Use Mermaid `sequenceDiagram` syntax, not `flowchart`.",
         (DiagramLanguages.Mermaid, "flow") => "Use Mermaid `flowchart TD` syntax, not `sequenceDiagram`.",
         (DiagramLanguages.Mermaid, "process") => "Use Mermaid `flowchart TD` syntax to represent a process, not `sequenceDiagram`.",
         _ => language == DiagramLanguages.Enzo ? "Use valid Enzo syntax." : "Use valid Mermaid syntax."
     };
+
+    private const string FlowProcessReliabilityGuidance = "Acyclic: no back-edges; retry/rework forward as Rework -> Reinspect. Labels `A -> B : yes`, never `A ->|yes| B`; quote multiword, prefer short labels. Short safe identifiers; declare first; decisions only for branches; silent check: kind, refs, labels, counts, concepts.";
+    private const string EnzoFlowGuidance = "Use Enzo `flow`, not sequence/bpmn. " + FlowProcessReliabilityGuidance;
+    private const string EnzoProcessGuidance = "Use Enzo `bpmn`, not flow/sequence. " + FlowProcessReliabilityGuidance;
+
+    private static string BuildEnzoFlowProcessUserPrompt(DiagramScenario scenario, GenerationContract contract)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Request:");
+        builder.AppendLine(scenario.Prompt);
+        builder.AppendLine();
+        builder.Append($"Need: {contract.ExpectedKind}");
+        if (contract.RequiredConcepts.Count > 0)
+        {
+            builder.Append($"; concepts {string.Join(", ", contract.RequiredConcepts)}");
+        }
+
+        var minimums = Minimums(contract)
+            .Where(minimum => minimum.Value is not null)
+            .Select(minimum => $">={minimum.Value} {minimum.Label}")
+            .ToArray();
+        if (minimums.Length > 0)
+        {
+            builder.Append($"; {string.Join(", ", minimums)}");
+        }
+
+        builder.AppendLine(".");
+        builder.AppendLine(LanguageKindInstruction(DiagramLanguages.Enzo, contract.ExpectedKind));
+        return builder.ToString().TrimEnd();
+    }
 
     internal static IEnumerable<string> RepairProblems(GenerationAttempt attempt)
     {

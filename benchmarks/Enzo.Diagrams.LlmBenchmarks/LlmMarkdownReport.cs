@@ -73,6 +73,8 @@ public static class LlmMarkdownReport
             | Oscillation repairs | {enzo.OscillationRepairs} |
             | Unresolved after max attempts | {enzo.RunsUnresolvedAfterMaxAttempts} |
 
+            {EnzoFirstPassFailureCategories(run)}
+
             {EnzoFailureCategories(run)}
 
             ## By Category
@@ -150,6 +152,18 @@ public static class LlmMarkdownReport
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => $"| {group.Key} | {group.Count()} |");
         return string.Join(Environment.NewLine, ["### Enzo Repair Failure Categories", "", "| Category | Attempts |", "| --- | ---: |", .. rows]);
+    }
+
+    private static string EnzoFirstPassFailureCategories(LlmBenchmarkRun run)
+    {
+        var rows = run.Results.Where(result => result.Language == DiagramLanguages.Enzo)
+            .Select(result => result.Attempts.FirstOrDefault(attempt => !attempt.IsRepair))
+            .Where(attempt => attempt is not null && !attempt.EquivalentValid)
+            .Select(attempt => EnzoRepairPromptBuilder.FailureCategoryFor(attempt!))
+            .GroupBy(category => category, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"| {group.Key} | {group.Count()} |");
+        return string.Join(Environment.NewLine, ["### First-Pass Enzo Failure Categories", "", "| Category | Runs |", "| --- | ---: |", .. rows]);
     }
 
     private static double Percent(LlmBenchmarkRun run, string language, Func<LlmRunResult, bool> predicate, int total) =>

@@ -108,10 +108,13 @@ public sealed class LlmBenchmarkTests
         await Runner(client, AlwaysValid(1), output).RunAsync(ScenariosDirectory(), Options(output, language: DiagramLanguages.Enzo), CancellationToken.None);
 
         var prompt = Assert.Single(client.UserPrompts);
+        var systemPrompt = Assert.Single(client.SystemPrompts);
         Assert.Contains("Authenticate a user by accepting credentials", prompt);
-        Assert.Contains("- Diagram kind: flow", prompt);
-        Assert.Contains("- At least 6 nodes", prompt);
-        Assert.Contains("Use Enzo `flow` syntax", prompt);
+        Assert.Contains("Need: flow", prompt);
+        Assert.Contains(">=6 nodes", prompt);
+        Assert.Contains("Use Enzo `flow`", prompt);
+        Assert.Contains("Return only valid Enzo.Diagrams DSL", systemPrompt);
+        Assert.Contains("Do not use Markdown fences or explanations", systemPrompt);
         Assert.DoesNotContain("MinimumNodeCount", prompt);
     }
 
@@ -334,6 +337,7 @@ public sealed class LlmBenchmarkTests
         Assert.Contains("Avg successful tokens to valid equivalent diagram", report);
         Assert.Contains("Avg repair input tokens", report);
         Assert.Contains("Enzo Repair Convergence", report);
+        Assert.Contains("First-Pass Enzo Failure Categories", report);
         Assert.Contains("Repairs that introduced new syntax failure", report);
         Assert.Contains("Equivalent By Category", report);
         Assert.Contains("Cold start includes", report);
