@@ -123,7 +123,7 @@ public static class GenerationPromptBuilder
         _ => language == DiagramLanguages.Enzo ? "Use valid Enzo syntax." : "Use valid Mermaid syntax."
     };
 
-    private static IEnumerable<string> RepairProblems(GenerationAttempt attempt)
+    internal static IEnumerable<string> RepairProblems(GenerationAttempt attempt)
     {
         if (!attempt.SyntaxValid)
         {

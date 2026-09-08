@@ -14,11 +14,16 @@ public sealed class PromptStore(string promptsDirectory)
         return File.ReadAllText(Path.Combine(promptsDirectory, fileName));
     }
 
+    public string GetRepairPrompt(string language) => language == DiagramLanguages.Enzo
+        ? File.ReadAllText(Path.Combine(promptsDirectory, "enzo-repair-system.txt"))
+        : GetPrompt(language);
+
     public PromptAudit CreateAudit() => new(
         GetPrompt(DiagramLanguages.Enzo),
         GetPrompt(DiagramLanguages.Mermaid),
         GenerationPromptBuilder.SharedSemanticTaskTemplate,
         GenerationPromptBuilder.EnzoLanguageSpecificAdditions,
         GenerationPromptBuilder.MermaidLanguageSpecificAdditions,
-        LlmMetrics.EquivalentCostComparisonThresholdPercent);
+        LlmMetrics.EquivalentCostComparisonThresholdPercent,
+        GetRepairPrompt(DiagramLanguages.Enzo));
 }
