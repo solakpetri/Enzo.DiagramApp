@@ -46,17 +46,51 @@ public sealed class LlmBenchmarkRunner(
         try
         {
             var systemPrompt = prompts.GetPrompt(language);
-            attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, GenerationPromptBuilder.BuildUserPrompt(scenario, language), settings, 0, false, null, cancellationToken));
+            var repairSystemPrompt = prompts.GetRepairPrompt(language);
+            string? pendingEscalation = null;
+            attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, GenerationPromptBuilder.BuildUserPrompt(scenario, language), settings, 0, false, null, null, null, cancellationToken));
             for (var repair = 1; attempts.Last().EquivalentValid is false && repair <= maxRepairAttempts; repair++)
             {
-                var repairType = GenerationPromptBuilder.RepairTypeFor(attempts.Last());
-                var userPrompt = GenerationPromptBuilder.BuildRepairPrompt(language, attempts.Last());
-                attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, userPrompt, settings, repair, true, repairType, cancellationToken));
-                repairStoppedReason = DetectRepairStagnation(attempts);
-                if (repairStoppedReason is not null)
+                var failedAttempt = attempts.Last();
+                var repairType = GenerationPromptBuilder.RepairTypeFor(failedAttempt);
+                var failureCategory = language == DiagramLanguages.Enzo ? EnzoRepairPromptBuilder.FailureCategoryFor(failedAttempt) : null;
+                var escalation = pendingEscalation;
+                pendingEscalation = null;
+                var userPrompt = language == DiagramLanguages.Enzo
+                    ? EnzoRepairPromptBuilder.BuildRepairPrompt(attempts, escalation)
+                    : GenerationPromptBuilder.BuildRepairPrompt(language, failedAttempt);
+                attempts.Add(await GenerateAttemptAsync(scenario, language, repairSystemPrompt, userPrompt, settings, repair, true, repairType, failureCategory, failedAttempt, cancellationToken));
+
+                var stagnation = DetectRepairStagnation(attempts);
+                if (language != DiagramLanguages.Enzo)
                 {
+                    repairStoppedReason = stagnation;
+                    if (repairStoppedReason is not null)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (escalation == EnzoRepairPromptBuilder.Oscillation && !attempts.Last().EquivalentValid)
+                {
+                    repairStoppedReason = EnzoRepairPromptBuilder.Oscillation;
                     break;
                 }
+
+                if (stagnation is null)
+                {
+                    continue;
+                }
+
+                if (escalation is not null || repair == maxRepairAttempts)
+                {
+                    repairStoppedReason = stagnation;
+                    break;
+                }
+
+                pendingEscalation = stagnation;
             }
 
             return Result(scenario, language, settings.Model, runNumber, attempts, attempts.Last().EquivalentValid ? null : repairStoppedReason ?? "validation", repairStoppedReason);
@@ -67,7 +101,18 @@ public sealed class LlmBenchmarkRunner(
         }
     }
 
-    private async Task<GenerationAttempt> GenerateAttemptAsync(DiagramScenario scenario, string language, string systemPrompt, string userPrompt, ModelSettings settings, int attemptNumber, bool isRepair, string? repairType, CancellationToken cancellationToken)
+    private async Task<GenerationAttempt> GenerateAttemptAsync(
+        DiagramScenario scenario,
+        string language,
+        string systemPrompt,
+        string userPrompt,
+        ModelSettings settings,
+        int attemptNumber,
+        bool isRepair,
+        string? repairType,
+        string? repairFailureCategory,
+        GenerationAttempt? failedAttempt,
+        CancellationToken cancellationToken)
     {
         var response = await modelClient.CompleteAsync(systemPrompt, userPrompt, settings, cancellationToken);
         var normalized = SourceNormalizer.RemoveMarkdownFence(response.Source);
@@ -94,7 +139,25 @@ public sealed class LlmBenchmarkRunner(
             semantic.EquivalentValid,
             semantic.FailureReasons,
             semantic.Diagnostics,
-            repairType);
+            repairType,
+            repairFailureCategory,
+            failedAttempt is null ? null : RepairResolved(failedAttempt, validation, semantic),
+            failedAttempt?.SyntaxValid == true && !validation.SyntaxValid);
+    }
+
+    private static bool RepairResolved(GenerationAttempt failedAttempt, ValidationOutcome validation, SemanticValidationResult semantic)
+    {
+        if (!failedAttempt.SyntaxValid)
+        {
+            return validation.SyntaxValid;
+        }
+
+        if (!failedAttempt.RenderValid)
+        {
+            return validation.SyntaxValid && validation.RenderSuccess;
+        }
+
+        return validation.SyntaxValid && validation.RenderSuccess && semantic.EquivalentValid;
     }
 
     private static string? DetectRepairStagnation(IReadOnlyList<GenerationAttempt> attempts)
@@ -106,10 +169,10 @@ public sealed class LlmBenchmarkRunner(
 
         if (attempts[^1].NormalizedSource == attempts[^2].NormalizedSource)
         {
-            return "identical-output";
+            return EnzoRepairPromptBuilder.IdenticalOutput;
         }
 
-        return attempts.Count >= 3 && attempts[^1].NormalizedSource == attempts[^3].NormalizedSource ? "repair-oscillation" : null;
+        return attempts.Count >= 3 && attempts[^1].NormalizedSource == attempts[^3].NormalizedSource ? EnzoRepairPromptBuilder.Oscillation : null;
     }
 
     private static LlmRunResult Result(DiagramScenario scenario, string language, string model, int runNumber, IReadOnlyList<GenerationAttempt> attempts, string? errorCategory, string? repairStoppedReason) =>

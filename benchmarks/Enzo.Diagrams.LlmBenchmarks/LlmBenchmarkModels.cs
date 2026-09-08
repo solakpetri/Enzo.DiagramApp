@@ -48,7 +48,10 @@ public sealed record GenerationAttempt(
     bool EquivalentValid = false,
     IReadOnlyList<string>? FailureReasons = null,
     SemanticValidationDiagnostics? SemanticDiagnostics = null,
-    string? RepairType = null);
+    string? RepairType = null,
+    string? RepairFailureCategory = null,
+    bool? RepairSuccessful = null,
+    bool IntroducedSyntaxFailure = false);
 
 public sealed record LlmRunResult(
     string ScenarioId,
@@ -107,7 +110,8 @@ public sealed record PromptAudit(
     string SharedSemanticTaskTemplate,
     string EnzoLanguageSpecificAdditions,
     string MermaidLanguageSpecificAdditions,
-    double CostComparisonEquivalentValidityThresholdPercent);
+    double CostComparisonEquivalentValidityThresholdPercent,
+    string? EnzoRepairSystemPrompt = null);
 
 public sealed record LlmBenchmarkMetadata(
     string RunId,

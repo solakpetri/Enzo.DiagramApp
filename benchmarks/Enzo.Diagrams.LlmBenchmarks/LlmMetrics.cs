@@ -33,7 +33,16 @@ public sealed record LanguageAggregate(
     int RunsRepairedFromStructuralFailure,
     int RunsRepairedFromSemanticConceptFailure,
     int RunsUnresolvedAfterRepair,
-    int RunsStoppedDueToStagnation);
+    int RunsStoppedDueToStagnation,
+    double AverageRepairInputTokens,
+    double RepairSuccessRatePercent,
+    int RepairAttemptsStarted,
+    int RepairsResolvedSyntax,
+    int RepairsResolvedSemanticFailure,
+    int RepairsIntroducedSyntaxFailure,
+    int IdenticalOutputRepairs,
+    int OscillationRepairs,
+    int RunsUnresolvedAfterMaxAttempts);
 
 public static class LlmMetrics
 {
@@ -43,6 +52,7 @@ public static class LlmMetrics
     {
         var runs = results.Where(result => result.Language == language).ToList();
         var equivalentFailures = runs.Count(r => !r.EquivalentValid);
+        var repairs = runs.SelectMany(RepairTransitions).ToList();
         return new LanguageAggregate(
             language,
             runs.Count,
@@ -76,7 +86,18 @@ public static class LlmMetrics
             runs.Count(r => r.EquivalentValid && r.Attempts.Any(a => HasRepairType(a, "Structure"))),
             runs.Count(r => r.EquivalentValid && r.Attempts.Any(a => HasRepairType(a, "Semantic"))),
             runs.Count(r => !r.EquivalentValid && r.RepairAttempts > 0),
-            runs.Count(r => r.RepairStoppedReason is not null));
+            runs.Count(r => r.RepairStoppedReason is not null),
+            Average(runs.Select(r => r.RepairInputTokens)),
+            Percent(repairs.Count(RepairSucceeded), repairs.Count),
+            repairs.Count,
+            repairs.Count(repair => !repair.Previous.SyntaxValid && repair.Current.SyntaxValid),
+            repairs.Count(repair => repair.Previous.SyntaxValid && repair.Previous.RenderValid && !repair.Previous.SemanticValid && repair.Current.SemanticValid),
+            repairs.Count(repair => repair.Previous.SyntaxValid && !repair.Current.SyntaxValid),
+            repairs.Count(repair => repair.Current.NormalizedSource == repair.Previous.NormalizedSource),
+            repairs.Count(repair => repair.TwoAttemptsBack is not null
+                && repair.Current.NormalizedSource != repair.Previous.NormalizedSource
+                && repair.Current.NormalizedSource == repair.TwoAttemptsBack.NormalizedSource),
+            runs.Count(r => !r.EquivalentValid && r.ErrorCategory == "validation" && r.RepairStoppedReason is null));
     }
 
     public static double Difference(double enzoValue, double mermaidValue) => mermaidValue == 0 ? 0 : (mermaidValue - enzoValue) / mermaidValue * 100;
@@ -163,6 +184,37 @@ public static class LlmMetrics
     private static bool HasRepairType(GenerationAttempt attempt, string repairType) =>
         attempt.RepairType?.Split('+').Contains(repairType, StringComparer.Ordinal) == true;
 
+    private static IEnumerable<RepairTransition> RepairTransitions(LlmRunResult result)
+    {
+        for (var index = 1; index < result.Attempts.Count; index++)
+        {
+            if (result.Attempts[index].IsRepair)
+            {
+                yield return new RepairTransition(result.Attempts[index - 1], result.Attempts[index], index >= 2 ? result.Attempts[index - 2] : null);
+            }
+        }
+    }
+
+    private static bool RepairSucceeded(RepairTransition repair)
+    {
+        if (repair.Current.RepairSuccessful is not null)
+        {
+            return repair.Current.RepairSuccessful.Value;
+        }
+
+        if (!repair.Previous.SyntaxValid)
+        {
+            return repair.Current.SyntaxValid;
+        }
+
+        if (!repair.Previous.RenderValid)
+        {
+            return repair.Current.SyntaxValid && repair.Current.RenderValid;
+        }
+
+        return repair.Current.EquivalentValid;
+    }
+
     private static double Percent(int count, int total) => total == 0 ? 0 : (double)count / total * 100;
 
     private static double StdDev(IEnumerable<int> values)
@@ -176,4 +228,6 @@ public static class LlmMetrics
         var average = array.Average();
         return Math.Sqrt(array.Sum(value => Math.Pow(value - average, 2)) / array.Length);
     }
+
+    private sealed record RepairTransition(GenerationAttempt Previous, GenerationAttempt Current, GenerationAttempt? TwoAttemptsBack);
 }

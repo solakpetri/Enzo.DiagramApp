@@ -48,6 +48,10 @@ public static class LlmMarkdownReport
 
             | Metric | Enzo | Mermaid |
             | --- | ---: | ---: |
+            | Avg repair attempts | {Number(enzo.AverageRepairAttempts)} | {Number(mermaid.AverageRepairAttempts)} |
+            | Avg repair input tokens | {Number(enzo.AverageRepairInputTokens)} | {Number(mermaid.AverageRepairInputTokens)} |
+            | Avg repair output tokens | {Number(enzo.AverageRepairOutputTokens)} | {Number(mermaid.AverageRepairOutputTokens)} |
+            | Repair success rate | {Number(enzo.RepairSuccessRatePercent)}% | {Number(mermaid.RepairSuccessRatePercent)}% |
             | Avg semantic repair attempts | {Number(enzo.AverageSemanticRepairAttempts)} | {Number(mermaid.AverageSemanticRepairAttempts)} |
             | Avg semantic repair input tokens | {Number(enzo.AverageSemanticRepairInputTokens)} | {Number(mermaid.AverageSemanticRepairInputTokens)} |
             | Avg semantic repair output tokens | {Number(enzo.AverageSemanticRepairOutputTokens)} | {Number(mermaid.AverageSemanticRepairOutputTokens)} |
@@ -56,6 +60,20 @@ public static class LlmMarkdownReport
             | Runs repaired from semantic concept failure | {enzo.RunsRepairedFromSemanticConceptFailure} | {mermaid.RunsRepairedFromSemanticConceptFailure} |
             | Runs unresolved after repair | {enzo.RunsUnresolvedAfterRepair} | {mermaid.RunsUnresolvedAfterRepair} |
             | Runs stopped due to stagnation | {enzo.RunsStoppedDueToStagnation} | {mermaid.RunsStoppedDueToStagnation} |
+
+            ## Enzo Repair Convergence
+
+            | Metric | Count |
+            | --- | ---: |
+            | Repair attempts started | {enzo.RepairAttemptsStarted} |
+            | Repairs that resolved syntax | {enzo.RepairsResolvedSyntax} |
+            | Repairs that resolved semantic failure | {enzo.RepairsResolvedSemanticFailure} |
+            | Repairs that introduced new syntax failure | {enzo.RepairsIntroducedSyntaxFailure} |
+            | Identical-output repairs | {enzo.IdenticalOutputRepairs} |
+            | Oscillation repairs | {enzo.OscillationRepairs} |
+            | Unresolved after max attempts | {enzo.RunsUnresolvedAfterMaxAttempts} |
+
+            {EnzoFailureCategories(run)}
 
             ## By Category
 
@@ -121,6 +139,17 @@ public static class LlmMarkdownReport
         var rows = run.Results.GroupBy(result => result.Category).OrderBy(group => group.Key).Select(group =>
             $"| {group.Key} | {Count(group, DiagramLanguages.Enzo, r => r.EquivalentValid)} / {Count(group, DiagramLanguages.Enzo, _ => true)} | {Count(group, DiagramLanguages.Mermaid, r => r.EquivalentValid)} / {Count(group, DiagramLanguages.Mermaid, _ => true)} |");
         return string.Join(Environment.NewLine, ["| Category | Enzo equivalent | Mermaid equivalent |", "| --- | ---: | ---: |", .. rows]);
+    }
+
+    private static string EnzoFailureCategories(LlmBenchmarkRun run)
+    {
+        var rows = run.Results.Where(result => result.Language == DiagramLanguages.Enzo)
+            .SelectMany(result => result.Attempts)
+            .Where(attempt => attempt.IsRepair && attempt.RepairFailureCategory is not null)
+            .GroupBy(attempt => attempt.RepairFailureCategory, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"| {group.Key} | {group.Count()} |");
+        return string.Join(Environment.NewLine, ["### Enzo Repair Failure Categories", "", "| Category | Attempts |", "| --- | ---: |", .. rows]);
     }
 
     private static double Percent(LlmBenchmarkRun run, string language, Func<LlmRunResult, bool> predicate, int total) =>
