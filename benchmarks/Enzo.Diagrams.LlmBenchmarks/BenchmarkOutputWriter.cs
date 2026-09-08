@@ -56,9 +56,12 @@ public sealed class BenchmarkOutputWriter
             r.RepairOutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalRepairTokens.ToString(CultureInfo.InvariantCulture),
             r.TokensToValidDiagram.ToString(CultureInfo.InvariantCulture), Csv(r.TokensToValidEquivalentDiagram?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
             r.SyntaxValid.ToString(), r.RenderSuccess.ToString(), r.RenderValid.ToString(), r.KindValid.ToString(), r.StructureValid.ToString(), r.SemanticValid.ToString(), r.EquivalentValid.ToString(),
-            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairType).Where(t => t is not null))), Csv(r.RepairStoppedReason ?? string.Empty), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
+            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairType).Where(t => t is not null))),
+            Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairFailureCategory).Where(c => c is not null))),
+            Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairSuccessful?.ToString() ?? string.Empty))),
+            r.Attempts.Count(a => a.IntroducedSyntaxFailure).ToString(CultureInfo.InvariantCulture), Csv(r.RepairStoppedReason ?? string.Empty), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
 
-        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,firstPassEquivalentValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,repairTypes,repairStoppedReason,failureReasons,errorCategory", .. rows]);
+        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,firstPassEquivalentValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,repairTypes,repairFailureCategories,repairSuccesses,repairsIntroducedSyntaxFailure,repairStoppedReason,failureReasons,errorCategory", .. rows]);
     }
 
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
