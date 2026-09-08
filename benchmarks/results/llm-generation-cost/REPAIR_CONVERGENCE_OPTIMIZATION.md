@@ -16,7 +16,7 @@ The stationary control baseline is the supplied `gpt-4o-mini` run with 30 scenar
 | Max TTV | 2206 |
 | Max TTVED | 2983 |
 
-`EQUIVALENT_FAILURE_ANALYSIS.md` identifies repair actionability and convergence as the highest-value Enzo optimization. Inspection of the matching latest persisted baseline confirmed four unresolved Enzo shapes:
+The pre-branch failure analysis report identified repair actionability and convergence as the highest-value Enzo optimization. Inspection of the matching latest persisted baseline confirmed four unresolved Enzo shapes:
 
 - `flow-content-review`: an identical repair retained an unsupported cycle.
 - `flow-warehouse-wave`: an identical repair retained Mermaid-style `A ->|label| B` edges.
