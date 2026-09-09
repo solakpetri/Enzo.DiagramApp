@@ -81,7 +81,7 @@ public sealed class LlmBenchmarkTests
         var serialized = System.Text.Json.JsonSerializer.Deserialize<LlmBenchmarkRun>(File.ReadAllText(jsonPath), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         Assert.Equal(result.TokensToValidDiagram, Assert.Single(serialized!.Results).TokensToValidDiagram);
         var csvPath = Assert.Single(Directory.EnumerateFiles(output, "*.csv"));
-        Assert.Contains("repairFailureCategories,repairSuccesses,repairsIntroducedSyntaxFailure", File.ReadAllText(csvPath));
+        Assert.Contains("sequenceFailureCategories,repairTypes,repairFailureCategories,repairSuccesses", File.ReadAllText(csvPath));
         Assert.Single(Directory.EnumerateFiles(output, "*.md"));
     }
 
@@ -113,6 +113,32 @@ public sealed class LlmBenchmarkTests
         Assert.Contains("- At least 6 nodes", prompt);
         Assert.Contains("Use Enzo `flow` syntax", prompt);
         Assert.DoesNotContain("MinimumNodeCount", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_IncludesSequenceParticipantsAndInteractions()
+    {
+        var scenario = new DiagramScenario(
+            "s",
+            "sequence",
+            "simple",
+            "Show a user calling an order API.",
+            string.Empty,
+            string.Empty,
+            new DiagramExpectations(
+                "sequence",
+                ["order"],
+                MinimumParticipantCount: 2,
+                MinimumInteractionCount: 1,
+                RequiredParticipants: ["User", "Order API"],
+                RequiredInteractions: [new RequiredInteraction("User", "Order API")]));
+
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(scenario, DiagramLanguages.Mermaid);
+
+        Assert.Contains("Include these participants", prompt);
+        Assert.Contains("- User", prompt);
+        Assert.Contains("User -> Order API", prompt);
+        Assert.Contains("Use Mermaid `sequenceDiagram` syntax", prompt);
     }
 
     [Fact]
@@ -337,7 +363,29 @@ public sealed class LlmBenchmarkTests
         Assert.Contains("Repairs that introduced new syntax failure", report);
         Assert.Contains("Equivalent By Category", report);
         Assert.Contains("Cold start includes", report);
+        Assert.Contains("Source Efficiency", report);
+        Assert.Contains("By Interaction Size", report);
         Assert.Contains("| flow |", report);
+    }
+
+    [Fact]
+    public void Parse_SequenceSuite_UsesIsolatedDefaultResultsDirectory()
+    {
+        var root = TempDirectory();
+        var broad = Directory.CreateDirectory(Path.Combine(root, "benchmarks", "results", "llm-generation-cost")).FullName;
+        var existing = Path.Combine(broad, "existing.json");
+        File.WriteAllText(existing, "broad");
+
+        var options = BenchmarkOptions.Parse(["--suite", "sequence", "--runs", "1"], root);
+        var writer = new BenchmarkOutputWriter();
+        var run = writer.LoadOrCreate(options);
+        writer.Write(run);
+
+        Assert.Equal("sequence", options.Suite);
+        Assert.EndsWith(Path.Combine("benchmarks", "results", "sequence-generation"), options.OutputDirectory);
+        Assert.Equal("broad", File.ReadAllText(existing));
+        Assert.Contains("sequence-generation", Directory.GetFiles(options.OutputDirectory, "*.json").Single());
+        Assert.Equal("sequence", run.Metadata.Suite);
     }
 
     [Fact]
@@ -368,7 +416,7 @@ public sealed class LlmBenchmarkTests
         new(client, new Dictionary<string, IDiagramValidator> { [DiagramLanguages.Enzo] = validator, [DiagramLanguages.Mermaid] = validator }, Prompts(), new BenchmarkOutputWriter());
 
     private static BenchmarkOptions Options(string output, string language, string? resume = null) =>
-        new(1, 3, "fake-model", 0.2, 1, 100, "flow-login-basic", null, language, output, resume, null, "mmdc");
+        new(1, 3, "fake-model", 0.2, 1, 100, "flow-login-basic", null, language, output, resume, null, "mmdc", "all");
     private static SequenceValidator AlwaysValid(int count) => new(new Queue<bool>(Enumerable.Repeat(true, count)));
 
     private static PromptStore Prompts() => new(Path.Combine(RepositoryRoot(), "benchmarks", "Enzo.Diagrams.LlmBenchmarks", "prompts"));

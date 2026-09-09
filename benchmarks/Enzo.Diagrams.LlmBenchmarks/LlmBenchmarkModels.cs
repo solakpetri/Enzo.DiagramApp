@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Enzo.Diagrams.LlmBenchmarks;
 
 public static class DiagramLanguages
@@ -51,7 +53,8 @@ public sealed record GenerationAttempt(
     string? RepairType = null,
     string? RepairFailureCategory = null,
     bool? RepairSuccessful = null,
-    bool IntroducedSyntaxFailure = false);
+    bool IntroducedSyntaxFailure = false,
+    IReadOnlyList<string>? FailureCategories = null);
 
 public sealed record LlmRunResult(
     string ScenarioId,
@@ -97,11 +100,30 @@ public sealed record LlmRunResult(
     public bool SemanticValid => FinalAttempt?.SemanticValid == true;
     public bool EquivalentValid => FinalAttempt?.EquivalentValid == true;
     public IReadOnlyList<string> FailureReasons => FinalAttempt?.FailureReasons ?? [];
+    public IReadOnlyList<string> SequenceFailureCategories => FinalAttempt?.FailureCategories ?? [];
     public bool FinalValid => Attempts.LastOrDefault()?.Valid == true;
     public bool NormalizationApplied => Attempts.Any(attempt => attempt.NormalizationApplied);
     public string? RepairStoppedReason { get; init; }
+    public int? ExpectedMinimumInteractionCount { get; init; }
+    public int SourceCharacters => EquivalentAttempt?.NormalizedSource.Length ?? 0;
+    public int SourceBytes => EquivalentAttempt is null ? 0 : Encoding.UTF8.GetByteCount(EquivalentAttempt.NormalizedSource);
+    public int NonEmptyLines => EquivalentAttempt?.NormalizedSource.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Count(line => line.Trim().Length > 0) ?? 0;
+    public int EquivalentOutputTokens => EquivalentAttempt?.OutputTokens ?? 0;
+    public int Participants => EquivalentAttempt?.SemanticDiagnostics?.ActualParticipants ?? 0;
+    public int Interactions => EquivalentAttempt?.SemanticDiagnostics?.ActualInteractions ?? 0;
+    public double? OutputTokensPerParticipant => Participants == 0 || EquivalentAttempt is null ? null : EquivalentAttempt.OutputTokens / (double)Participants;
+    public double? OutputTokensPerInteraction => Interactions == 0 || EquivalentAttempt is null ? null : EquivalentAttempt.OutputTokens / (double)Interactions;
+    public double? TokensToValidEquivalentDiagramPerInteraction => Interactions == 0 || TokensToValidEquivalentDiagram is null ? null : TokensToValidEquivalentDiagram.Value / (double)Interactions;
+    public string InteractionSizeBucket => ExpectedMinimumInteractionCount switch
+    {
+        <= 6 => "small",
+        <= 12 => "medium",
+        > 12 => "large",
+        _ => "unknown"
+    };
     private GenerationAttempt? InitialAttempt => Attempts.FirstOrDefault(attempt => !attempt.IsRepair);
     private GenerationAttempt? FinalAttempt => Attempts.LastOrDefault();
+    private GenerationAttempt? EquivalentAttempt => Attempts.FirstOrDefault(attempt => attempt.EquivalentValid);
 }
 
 public sealed record PromptAudit(
@@ -125,7 +147,8 @@ public sealed record LlmBenchmarkMetadata(
     string ScenarioFilter,
     string CategoryFilter,
     string LanguageFilter,
-    PromptAudit? PromptAudit = null);
+    PromptAudit? PromptAudit = null,
+    string Suite = "all");
 
 public sealed record LlmBenchmarkRun(
     LlmBenchmarkMetadata Metadata,

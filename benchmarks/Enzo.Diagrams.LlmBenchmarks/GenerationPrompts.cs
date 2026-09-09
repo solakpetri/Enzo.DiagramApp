@@ -10,7 +10,9 @@ public sealed record GenerationContract(
     int? MinimumEdgeCount,
     int? MinimumDecisionCount,
     int? MinimumParticipantCount,
-    int? MinimumInteractionCount)
+    int? MinimumInteractionCount,
+    IReadOnlyList<string> RequiredParticipants,
+    IReadOnlyList<RequiredInteraction> RequiredInteractions)
 {
     public static GenerationContract From(DiagramScenario scenario) => new(
         scenario.Expectations.ExpectedKind,
@@ -19,7 +21,9 @@ public sealed record GenerationContract(
         scenario.Expectations.MinimumEdgeCount,
         scenario.Expectations.MinimumDecisionCount,
         scenario.Expectations.MinimumParticipantCount,
-        scenario.Expectations.MinimumInteractionCount);
+        scenario.Expectations.MinimumInteractionCount,
+        scenario.Expectations.RequiredParticipants ?? [],
+        scenario.Expectations.RequiredInteractions ?? []);
 }
 
 public static class GenerationPromptBuilder
@@ -44,6 +48,24 @@ public static class GenerationPromptBuilder
             foreach (var concept in contract.RequiredConcepts)
             {
                 builder.AppendLine($"  - {concept}");
+            }
+        }
+
+        if (contract.RequiredParticipants.Count > 0)
+        {
+            builder.AppendLine("- Include these participants:");
+            foreach (var participant in contract.RequiredParticipants)
+            {
+                builder.AppendLine($"  - {participant}");
+            }
+        }
+
+        if (contract.RequiredInteractions.Count > 0)
+        {
+            builder.AppendLine("- Include these participant interactions:");
+            foreach (var interaction in contract.RequiredInteractions)
+            {
+                builder.AppendLine($"  - {interaction.From} -> {interaction.To}{(interaction.Label is null ? string.Empty : $": {interaction.Label}")}");
             }
         }
 
@@ -151,6 +173,16 @@ public static class GenerationPromptBuilder
         foreach (var concept in diagnostics.MissingConcepts)
         {
             yield return $"Missing required concept: {concept}.";
+        }
+
+        foreach (var participant in diagnostics.MissingParticipants ?? [])
+        {
+            yield return $"Missing required participant: {participant}.";
+        }
+
+        foreach (var interaction in diagnostics.MissingInteractions ?? [])
+        {
+            yield return $"Missing required interaction: {interaction.From} -> {interaction.To}.";
         }
 
         foreach (var problem in MinimumProblems(diagnostics))

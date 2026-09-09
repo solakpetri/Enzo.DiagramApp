@@ -19,7 +19,8 @@ public static partial class ConceptNormalizer
             builder.Append(char.IsLetterOrDigit(ch) ? ch : ' ');
         }
 
-        return WhitespaceRegex().Replace(builder.ToString(), " ").Trim();
+        return WhitespaceRegex().Replace(builder.ToString(), " ").Trim()
+            .Replace("saa s", "saas", StringComparison.Ordinal);
     }
 
     private static string SplitIdentifierCasing(string value) =>

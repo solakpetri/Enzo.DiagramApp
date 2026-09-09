@@ -13,11 +13,13 @@ public sealed record BenchmarkOptions(
     string OutputDirectory,
     string? ResumeFile,
     string? ReevaluateFile,
-    string MermaidCommand)
+    string MermaidCommand,
+    string Suite)
 {
     public static BenchmarkOptions Parse(string[] args, string repositoryRoot)
     {
         var values = ReadArgs(args);
+        var suite = String(values, "suite", "all").ToLowerInvariant();
         return new BenchmarkOptions(
             Int(values, "runs", 5),
             Int(values, "max-repair-attempts", 3),
@@ -28,11 +30,18 @@ public sealed record BenchmarkOptions(
             NullableString(values, "scenario"),
             NullableString(values, "category"),
             String(values, "language", "all").ToLowerInvariant(),
-            String(values, "output-directory", Path.Combine(repositoryRoot, "benchmarks", "results", "llm-generation-cost")),
+            String(values, "output-directory", DefaultOutputDirectory(repositoryRoot, suite)),
             NullableString(values, "resume"),
             NullableString(values, "reevaluate"),
-            String(values, "mermaid-command", Environment.GetEnvironmentVariable("MERMAID_CLI") ?? MermaidExecutableResolver.GetDefaultExecutable()));
+            String(values, "mermaid-command", Environment.GetEnvironmentVariable("MERMAID_CLI") ?? MermaidExecutableResolver.GetDefaultExecutable()),
+            suite);
     }
+
+    private static string DefaultOutputDirectory(string repositoryRoot, string suite) => Path.Combine(
+        repositoryRoot,
+        "benchmarks",
+        "results",
+        suite == "sequence" ? "sequence-generation" : "llm-generation-cost");
 
     private static Dictionary<string, string> ReadArgs(string[] args)
     {

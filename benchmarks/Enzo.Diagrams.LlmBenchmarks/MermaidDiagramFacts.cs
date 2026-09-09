@@ -88,7 +88,18 @@ public static partial class MermaidDiagramFacts
             }
         }
 
-        return new DiagramFacts("sequence", labels, 0, 0, 0, participants.Count, interactions);
+        return new DiagramFacts("sequence", labels, 0, 0, 0, participants.Count, interactions)
+        {
+            Participants = participants.Select(participant => ParticipantLabel(participant.Key, participant.Value)).ToList(),
+            Interactions = lines.Skip(1)
+                .Select(line => SequenceMessageRegex().Match(line))
+                .Where(message => message.Success)
+                .Select(message => new DiagramInteraction(
+                    EndpointLabel(participants, message.Groups["from"].Value),
+                    EndpointLabel(participants, message.Groups["to"].Value),
+                    message.Groups["label"].Value))
+                .ToList()
+        };
     }
 
     private static void AddEndpoint(Dictionary<string, (string Label, bool Decision)> nodes, List<string> labels, string text)
@@ -138,6 +149,9 @@ public static partial class MermaidDiagramFacts
 
     private static string FirstNonEmpty(params string[] values) => values.First(value => !string.IsNullOrWhiteSpace(value));
     private static string Unquote(string value) => value.Trim().Trim('"', '\'');
+    private static string ParticipantLabel(string id, string name) => id.Equals(name, StringComparison.Ordinal) ? id : $"{id} {name}";
+    private static string EndpointLabel(IReadOnlyDictionary<string, string> participants, string id) =>
+        participants.TryGetValue(id, out var label) ? ParticipantLabel(id, label) : id;
 
     [GeneratedRegex("^(?<from>[A-Za-z0-9_.$-]+(?:\\s*(?:\\[.*?\\]|\\{.*?\\}|\\(.*?\\)))?)\\s*(?:--\\|(?<barlabel>.*?)\\|-->|--\\s*(?<label>.*?)\\s*-->|-->|==>|-.->)\\s*(?<to>[A-Za-z0-9_.$-]+(?:\\s*(?:\\[.*?\\]|\\{.*?\\}|\\(.*?\\)))?)$")]
     private static partial Regex FlowEdgeRegex();
