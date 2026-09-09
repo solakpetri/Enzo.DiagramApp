@@ -45,7 +45,7 @@ public sealed class LlmBenchmarkRunner(
         string? repairStoppedReason = null;
         try
         {
-            var systemPrompt = prompts.GetPrompt(language);
+            var systemPrompt = prompts.GetPrompt(language, scenario.Expectations.ExpectedKind);
             var repairSystemPrompt = prompts.GetRepairPrompt(language);
             string? pendingEscalation = null;
             attempts.Add(await GenerateAttemptAsync(scenario, language, systemPrompt, GenerationPromptBuilder.BuildUserPrompt(scenario, language), settings, 0, false, null, null, null, cancellationToken));

@@ -133,7 +133,8 @@ public sealed record PromptAudit(
     string EnzoLanguageSpecificAdditions,
     string MermaidLanguageSpecificAdditions,
     double CostComparisonEquivalentValidityThresholdPercent,
-    string? EnzoRepairSystemPrompt = null);
+    string? EnzoRepairSystemPrompt = null,
+    string? EnzoSequenceSystemPrompt = null);
 
 public sealed record LlmBenchmarkMetadata(
     string RunId,

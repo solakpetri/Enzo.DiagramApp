@@ -79,7 +79,11 @@ public static class GenerationPromptBuilder
         }
         builder.AppendLine();
         builder.AppendLine(SourceOnlyInstruction(language, contract.ExpectedKind));
-        builder.AppendLine(LanguageKindInstruction(language, contract.ExpectedKind));
+        if (!isEnzoSequence)
+        {
+            builder.AppendLine(LanguageKindInstruction(language, contract.ExpectedKind));
+        }
+
         return builder.ToString().TrimEnd();
     }
 
@@ -147,7 +151,7 @@ public static class GenerationPromptBuilder
     };
 
     private static string SourceOnlyInstruction(string language, string expectedKind) => language == DiagramLanguages.Enzo && expectedKind == "sequence"
-        ? "Silently check all listed requirements and Enzo sequence syntax. Return source only; no Markdown/explanations."
+        ? "Before output, silently verify required participants, concepts, interactions, and counts; return source only."
         : "Return the complete diagram source only. Do not use Markdown fences or explanations.";
 
     internal static IEnumerable<string> RepairProblems(GenerationAttempt attempt)

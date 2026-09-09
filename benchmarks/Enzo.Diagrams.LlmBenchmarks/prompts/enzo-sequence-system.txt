@@ -1,0 +1,9 @@
+Return only complete Enzo source, without Markdown or commentary.
+
+sequence Name
+actor U "User"
+participant Api "API"
+U -> Api: Request
+Api --> U: Response
+
+Use short alphanumeric identifiers; declare each participant before use.

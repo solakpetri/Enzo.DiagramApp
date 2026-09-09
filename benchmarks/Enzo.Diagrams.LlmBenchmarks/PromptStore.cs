@@ -2,10 +2,11 @@ namespace Enzo.Diagrams.LlmBenchmarks;
 
 public sealed class PromptStore(string promptsDirectory)
 {
-    public string GetPrompt(string language)
+    public string GetPrompt(string language, string? expectedKind = null)
     {
         var fileName = language switch
         {
+            DiagramLanguages.Enzo when expectedKind == "sequence" => "enzo-sequence-system.txt",
             DiagramLanguages.Enzo => "enzo-system.txt",
             DiagramLanguages.Mermaid => "mermaid-system.txt",
             _ => throw new ArgumentOutOfRangeException(nameof(language), language, "Unknown diagram language.")
@@ -25,5 +26,6 @@ public sealed class PromptStore(string promptsDirectory)
         GenerationPromptBuilder.EnzoLanguageSpecificAdditions,
         GenerationPromptBuilder.MermaidLanguageSpecificAdditions,
         LlmMetrics.EquivalentCostComparisonThresholdPercent,
-        GetRepairPrompt(DiagramLanguages.Enzo));
+        GetRepairPrompt(DiagramLanguages.Enzo),
+        GetPrompt(DiagramLanguages.Enzo, "sequence"));
 }
