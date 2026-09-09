@@ -9,7 +9,13 @@ public sealed record DiagramFacts(
     int EdgeCount,
     int DecisionCount,
     int ParticipantCount,
-    int InteractionCount);
+    int InteractionCount)
+{
+    public IReadOnlyList<string> Participants { get; init; } = [];
+    public IReadOnlyList<DiagramInteraction> Interactions { get; init; } = [];
+}
+
+public sealed record DiagramInteraction(string From, string To, string? Label);
 
 public sealed record SemanticValidationDiagnostics(
     string ExpectedKind,
@@ -26,7 +32,13 @@ public sealed record SemanticValidationDiagnostics(
     int? ExpectedMinimumParticipants,
     int? ActualParticipants,
     int? ExpectedMinimumInteractions,
-    int? ActualInteractions);
+    int? ActualInteractions,
+    IReadOnlyList<string>? RequiredParticipants = null,
+    IReadOnlyList<string>? MatchedParticipants = null,
+    IReadOnlyList<string>? MissingParticipants = null,
+    IReadOnlyList<RequiredInteraction>? RequiredInteractions = null,
+    IReadOnlyList<RequiredInteraction>? MatchedInteractions = null,
+    IReadOnlyList<RequiredInteraction>? MissingInteractions = null);
 
 public sealed record SemanticValidationResult(
     bool KindValid,
@@ -61,19 +73,33 @@ public static class SemanticDiagramValidator
         }
 
         var labels = facts?.Labels.Select(ConceptNormalizer.Normalize).Where(label => label.Length > 0).ToList() ?? [];
-        var matched = new List<string>();
-        var missing = new List<string>();
-        foreach (var concept in expected.RequiredConcepts)
+        var (matched, missing) = MatchRequiredLabels(expected.RequiredConcepts, labels, expected);
+        foreach (var concept in missing)
         {
-            var aliases = new[] { concept }.Concat(Aliases(expected, concept)).Select(ConceptNormalizer.Normalize).Where(alias => alias.Length > 0).ToList();
-            if (aliases.Any(alias => labels.Any(label => label == alias || ContainsTokenSequence(label, alias))))
+            failures.Add($"Missing required concept: {concept}.");
+        }
+
+        var participants = facts?.Participants.Select(ConceptNormalizer.Normalize).Where(participant => participant.Length > 0).ToList() ?? [];
+        var requiredParticipants = expected.RequiredParticipants ?? [];
+        var (matchedParticipants, missingParticipants) = MatchRequiredLabels(requiredParticipants, participants, expected);
+        foreach (var participant in missingParticipants)
+        {
+            failures.Add($"Missing required participant: {participant}.");
+        }
+
+        var requiredInteractions = expected.RequiredInteractions ?? [];
+        var matchedInteractions = new List<RequiredInteraction>();
+        var missingInteractions = new List<RequiredInteraction>();
+        foreach (var interaction in requiredInteractions)
+        {
+            if (facts?.Interactions.Any(actual => MatchesInteraction(actual, interaction, expected)) == true)
             {
-                matched.Add(concept);
+                matchedInteractions.Add(interaction);
                 continue;
             }
 
-            missing.Add(concept);
-            failures.Add($"Missing required concept: {concept}.");
+            missingInteractions.Add(interaction);
+            failures.Add($"Missing required interaction: {interaction.From} -> {interaction.To}.");
         }
 
         var structureValid = true;
@@ -83,7 +109,7 @@ public static class SemanticDiagramValidator
         CheckMinimum(failures, ref structureValid, "participants", expected.MinimumParticipantCount, facts?.ParticipantCount);
         CheckMinimum(failures, ref structureValid, "interactions", expected.MinimumInteractionCount, facts?.InteractionCount);
 
-        var semanticValid = missing.Count == 0;
+        var semanticValid = missing.Count == 0 && missingParticipants.Count == 0 && missingInteractions.Count == 0;
         var equivalentValid = syntaxValid && renderValid && kindValid && structureValid && semanticValid;
         return new SemanticValidationResult(
             kindValid,
@@ -106,7 +132,13 @@ public static class SemanticDiagramValidator
                 expected.MinimumParticipantCount,
                 facts?.ParticipantCount,
                 expected.MinimumInteractionCount,
-                facts?.InteractionCount));
+                facts?.InteractionCount,
+                requiredParticipants,
+                matchedParticipants,
+                missingParticipants,
+                requiredInteractions,
+                matchedInteractions,
+                missingInteractions));
     }
 
     private static DiagramFacts? TryExtractFacts(string language, string source, string expectedKind, List<string> failures)
@@ -130,6 +162,32 @@ public static class SemanticDiagramValidator
     private static IEnumerable<string> Aliases(DiagramExpectations expected, string concept) =>
         expected.ConceptAliases is not null && expected.ConceptAliases.TryGetValue(concept, out var aliases) ? aliases : [];
 
+    private static (List<string> Matched, List<string> Missing) MatchRequiredLabels(IReadOnlyList<string> required, IReadOnlyList<string> actual, DiagramExpectations expected)
+    {
+        var matched = new List<string>();
+        var missing = new List<string>();
+        foreach (var item in required)
+        {
+            if (AliasesIncludingSelf(expected, item).Any(alias => actual.Any(label => LabelMatches(label, alias))))
+            {
+                matched.Add(item);
+                continue;
+            }
+
+            missing.Add(item);
+        }
+
+        return (matched, missing);
+    }
+
+    private static bool MatchesInteraction(DiagramInteraction actual, RequiredInteraction expected, DiagramExpectations expectations) =>
+        AliasesIncludingSelf(expectations, expected.From).Any(alias => LabelMatches(ConceptNormalizer.Normalize(actual.From), alias)) &&
+        AliasesIncludingSelf(expectations, expected.To).Any(alias => LabelMatches(ConceptNormalizer.Normalize(actual.To), alias)) &&
+        (expected.Label is null || LabelMatches(ConceptNormalizer.Normalize(actual.Label ?? string.Empty), ConceptNormalizer.Normalize(expected.Label)));
+
+    private static IReadOnlyList<string> AliasesIncludingSelf(DiagramExpectations expected, string value) =>
+        new[] { value }.Concat(Aliases(expected, value)).Select(ConceptNormalizer.Normalize).Where(alias => alias.Length > 0).ToList();
+
     private static void CheckMinimum(List<string> failures, ref bool valid, string label, int? expected, int? actual)
     {
         if (expected is null)
@@ -143,6 +201,8 @@ public static class SemanticDiagramValidator
             failures.Add($"Expected at least {expected.Value} {label}; found {actual?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}.");
         }
     }
+
+    private static bool LabelMatches(string label, string concept) => label == concept || ContainsTokenSequence(label, concept);
 
     private static bool ContainsTokenSequence(string label, string concept) =>
         $" {label} ".Contains($" {concept} ", StringComparison.Ordinal);

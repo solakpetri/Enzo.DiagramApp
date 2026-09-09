@@ -27,6 +27,7 @@ public static class EnzoDiagramFacts
 
         if (parsed.SequenceDiagram is { } sequence)
         {
+            var participants = sequence.Participants.ToDictionary(participant => participant.Id, ParticipantLabel, StringComparer.Ordinal);
             return new DiagramFacts(
                 "sequence",
                 sequence.Participants.SelectMany(participant => new[] { participant.Id, participant.DisplayName }).OfType<string>().Concat(sequence.Messages.Select(message => message.Label)).ToList(),
@@ -34,7 +35,14 @@ public static class EnzoDiagramFacts
                 0,
                 0,
                 sequence.Participants.Count,
-                sequence.Messages.Count);
+                sequence.Messages.Count)
+            {
+                Participants = participants.Values.ToList(),
+                Interactions = sequence.Messages.Select(message => new DiagramInteraction(
+                    EndpointLabel(participants, message.FromId),
+                    EndpointLabel(participants, message.ToId),
+                    message.Label)).ToList()
+            };
         }
 
         var bpmn = parsed.BpmnDiagram!;
@@ -47,4 +55,12 @@ public static class EnzoDiagramFacts
             0,
             0);
     }
+
+    private static string ParticipantLabel(SequenceParticipant participant) =>
+        participant.DisplayName is null || participant.DisplayName.Equals(participant.Id, StringComparison.Ordinal)
+            ? participant.Id
+            : $"{participant.Id} {participant.DisplayName}";
+
+    private static string EndpointLabel(IReadOnlyDictionary<string, string> participants, string id) =>
+        participants.TryGetValue(id, out var label) ? label : id;
 }

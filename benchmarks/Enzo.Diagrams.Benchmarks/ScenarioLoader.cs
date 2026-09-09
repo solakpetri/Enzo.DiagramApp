@@ -17,6 +17,7 @@ public static class ScenarioLoader
         }
 
         var scenarios = Directory.EnumerateFiles(scenariosDirectory, "*.json", SearchOption.AllDirectories)
+            .Where(path => !IsIsolatedSuiteFile(scenariosDirectory, path))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .SelectMany(ReadFile)
             .ToList();
@@ -48,5 +49,17 @@ public static class ScenarioLoader
         using var stream = File.OpenRead(path);
         return JsonSerializer.Deserialize<List<DiagramScenario>>(stream, Options)
             ?? throw new BenchmarkValidationException($"Scenario file is empty: {path}");
+    }
+
+    private static bool IsIsolatedSuiteFile(string scenariosDirectory, string path)
+    {
+        if (!new DirectoryInfo(scenariosDirectory).Name.Equals("scenarios", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(scenariosDirectory, path);
+        return relative.StartsWith($"sequence-generation{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+            || relative.StartsWith($"sequence-generation{Path.AltDirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
     }
 }

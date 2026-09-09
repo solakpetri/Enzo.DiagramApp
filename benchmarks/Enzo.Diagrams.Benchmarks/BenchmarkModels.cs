@@ -17,7 +17,11 @@ public sealed record DiagramExpectations(
     int? MinimumDecisionCount = null,
     int? MinimumParticipantCount = null,
     int? MinimumInteractionCount = null,
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? ConceptAliases = null);
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? ConceptAliases = null,
+    IReadOnlyList<string>? RequiredParticipants = null,
+    IReadOnlyList<RequiredInteraction>? RequiredInteractions = null);
+
+public sealed record RequiredInteraction(string From, string To, string? Label = null);
 
 public sealed record RepresentationMetrics(
     int Utf8Bytes,
