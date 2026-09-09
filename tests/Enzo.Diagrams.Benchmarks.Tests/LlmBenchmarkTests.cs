@@ -116,6 +116,21 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
+    public async Task RunAsync_UsesSequenceSpecificEnzoSystemPromptForSequenceGeneration()
+    {
+        var output = TempDirectory();
+        var client = new FakeClient(new Queue<ModelResponse>([new ModelResponse(ValidSequenceSource(), new TokenUsage(10, 5, 15), TimeSpan.Zero)]));
+        var options = new BenchmarkOptions(1, 0, "fake-model", 0.2, 1, 100, "sequence-login-basic", null, DiagramLanguages.Enzo, output, null, null, "mmdc", "sequence");
+
+        await Runner(client, AlwaysValid(1), output).RunAsync(ScenariosDirectory(), options, CancellationToken.None);
+
+        var prompt = Assert.Single(client.SystemPrompts);
+        Assert.Equal(Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence"), prompt);
+        Assert.DoesNotContain("Flowchart:", prompt);
+        Assert.DoesNotContain("Business process:", prompt);
+    }
+
+    [Fact]
     public void BuildUserPrompt_IncludesSequenceParticipantsAndInteractions()
     {
         var scenario = new DiagramScenario(
@@ -146,8 +161,8 @@ public sealed class LlmBenchmarkTests
     {
         var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
 
-        Assert.Contains("Silently check all listed requirements and Enzo sequence syntax", prompt);
-        Assert.Contains("Return source only; no Markdown/explanations", prompt);
+        Assert.Contains("Before output, silently verify required participants, concepts, interactions, and counts", prompt);
+        Assert.Contains("return source only", prompt);
         Assert.DoesNotContain("checklist", prompt, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -192,20 +207,51 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
-    public void BuildUserPrompt_EnzoSequenceReturnsSourceOnlyAndKeepsKindEnforcement()
+    public void BuildUserPrompt_EnzoSequenceReturnsSourceOnlyWithoutRepeatingKindSyntax()
     {
         var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
 
-        Assert.Contains("Return source only", prompt);
-        Assert.Contains("no Markdown/explanations", prompt);
-        Assert.Contains("Use Enzo `sequence` syntax, not `flow` or `bpmn`.", prompt);
+        Assert.Contains("return source only", prompt);
+        Assert.Contains("- Diagram kind: sequence", prompt);
+        Assert.DoesNotContain("Use Enzo `sequence` syntax", prompt);
     }
 
     [Fact]
-    public void BuildUserPrompt_EnzoSequenceDoesNotIncludeFlowOrProcessGuidance()
+    public void EnzoSequenceInitialPrompt_UsesSequenceOnlySyntaxGuidance()
     {
-        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+        var prompt = Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence");
 
+        Assert.Contains("sequence Name", prompt);
+        Assert.Contains("actor", prompt);
+        Assert.Contains("participant", prompt);
+        Assert.Contains("->", prompt);
+        Assert.Contains("-->", prompt);
+        Assert.DoesNotContain("flow Name", prompt);
+        Assert.DoesNotContain("bpmn", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("gateway", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EnzoSequenceInitialPrompt_PreservesSourceOnlyBehavior()
+    {
+        var prompt = Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence")
+            + Environment.NewLine
+            + GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("Return only complete Enzo source", prompt);
+        Assert.Contains("without Markdown or commentary", prompt);
+        Assert.Contains("return source only", prompt);
+    }
+
+    [Fact]
+    public void EnzoSequenceInitialPrompt_DoesNotIncludeFlowOrProcessGuidance()
+    {
+        var prompt = Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence")
+            + Environment.NewLine
+            + GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.DoesNotContain("flow Name", prompt);
+        Assert.DoesNotContain("bpmn", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("cycle", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("acyclic", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("gateway", prompt, StringComparison.OrdinalIgnoreCase);
@@ -213,14 +259,24 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
-    public void BuildUserPrompt_EnzoSequencePromptTokenImpactStaysSmall()
+    public void EnzoSequenceFixedInstructionPromptStaysCompact()
+    {
+        var prompt = Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence");
+
+        Assert.True(CountPromptTokens(prompt) <= 55, $"Fixed Enzo sequence instruction was {CountPromptTokens(prompt)} tokens.");
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceCompleteInitialPromptStaysCompact()
     {
         var scenarios = ScenarioLoader.Load(Path.Combine(RepositoryRoot(), "benchmarks", "scenarios", "sequence-generation"));
-        var tokenDeltas = scenarios
-            .Select(scenario => CountPromptTokens(GenerationPromptBuilder.BuildUserPrompt(scenario, DiagramLanguages.Enzo)) - CountPromptTokens(BuildLegacyUserPrompt(scenario, DiagramLanguages.Enzo)))
+        var systemPrompt = Prompts().GetPrompt(DiagramLanguages.Enzo, "sequence");
+        var promptTokens = scenarios
+            .Select(scenario => CountPromptTokens(systemPrompt + Environment.NewLine + GenerationPromptBuilder.BuildUserPrompt(scenario, DiagramLanguages.Enzo)))
             .ToList();
 
-        Assert.All(tokenDeltas, delta => Assert.True(delta <= 10, $"Prompt token delta was {delta}."));
+        var average = promptTokens.Average();
+        Assert.True(average <= 215, $"Average complete initial prompt was {average:0.0} tokens.");
     }
 
     [Fact]
@@ -520,66 +576,6 @@ public sealed class LlmBenchmarkTests
 
         return count;
     }
-
-    private static string BuildLegacyUserPrompt(DiagramScenario scenario, string language)
-    {
-        var contract = GenerationContract.From(scenario);
-        var builder = new System.Text.StringBuilder();
-        builder.AppendLine($"Create a {contract.ExpectedKind} diagram for this request:");
-        builder.AppendLine();
-        builder.AppendLine(scenario.Prompt);
-        builder.AppendLine();
-        builder.AppendLine("Requirements:");
-        builder.AppendLine($"- Diagram kind: {contract.ExpectedKind}");
-        if (contract.RequiredConcepts.Count > 0)
-        {
-            builder.AppendLine("- Include these concepts:");
-            foreach (var concept in contract.RequiredConcepts)
-            {
-                builder.AppendLine($"  - {concept}");
-            }
-        }
-
-        if (contract.RequiredParticipants.Count > 0)
-        {
-            builder.AppendLine("- Include these participants:");
-            foreach (var participant in contract.RequiredParticipants)
-            {
-                builder.AppendLine($"  - {participant}");
-            }
-        }
-
-        if (contract.RequiredInteractions.Count > 0)
-        {
-            builder.AppendLine("- Include these participant interactions:");
-            foreach (var interaction in contract.RequiredInteractions)
-            {
-                builder.AppendLine($"  - {interaction.From} -> {interaction.To}{(interaction.Label is null ? string.Empty : $": {interaction.Label}")}");
-            }
-        }
-
-        foreach (var (value, label) in LegacyMinimums(contract))
-        {
-            if (value is not null)
-            {
-                builder.AppendLine($"- At least {value} {label}");
-            }
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Return the complete diagram source only. Do not use Markdown fences or explanations.");
-        builder.AppendLine(GenerationPromptBuilder.LanguageKindInstruction(language, contract.ExpectedKind));
-        return builder.ToString().TrimEnd();
-    }
-
-    private static IEnumerable<(int? Value, string Label)> LegacyMinimums(GenerationContract contract) =>
-    [
-        (contract.MinimumNodeCount, "nodes"),
-        (contract.MinimumEdgeCount, "edges"),
-        (contract.MinimumDecisionCount, "decisions"),
-        (contract.MinimumParticipantCount, "participants"),
-        (contract.MinimumInteractionCount, "interactions")
-    ];
 
     private static GenerationAttempt Attempt(int number, bool repair, int input, int output, bool valid, bool equivalent = false) =>
         new(number, repair, input, output, input + output, valid ? "valid" : "bad", valid ? "valid" : "bad", false, valid, valid, valid ? null : "invalid", 1, valid, valid, equivalent, equivalent, equivalent, equivalent, equivalent ? [] : ["not equivalent"], null);
