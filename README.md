@@ -12,6 +12,10 @@ Enzo.Diagrams owns the DSL, parser, validator, layout, and rendering pipeline. A
 - Suitable for AI-generated diagrams without depending on a specific AI provider.
 - SVG and PNG output for documentation, chat, tickets, and build pipelines.
 
+## Benchmarks
+
+Enzo was benchmarked against Mermaid for AI-generated sequence diagrams using 30 scenarios and 5 runs per scenario. Enzo produced more compact source and lower typical token cost, particularly for simple and medium diagrams. Mermaid remained stronger on first-pass syntax reliability and cheaper for complex diagrams due to lower Enzo repair frequency. See the full methodology, results, and limitations in [BENCHMARKS.md](BENCHMARKS.md).
+
 ## Architecture
 
 ![Enzo.Diagrams architecture](docs/assets/architecture.svg)
