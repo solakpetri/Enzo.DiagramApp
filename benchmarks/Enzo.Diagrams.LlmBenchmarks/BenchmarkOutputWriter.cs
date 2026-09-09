@@ -19,7 +19,7 @@ public sealed class BenchmarkOutputWriter
         }
 
         var runId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
-        _jsonPath = Path.Combine(runOptions.OutputDirectory, $"llm-generation-cost-{runId}-{Safe(runOptions.Model)}.json");
+        _jsonPath = Path.Combine(runOptions.OutputDirectory, $"{OutputPrefix(runOptions.Suite)}-{runId}-{Safe(runOptions.Model)}.json");
         return new LlmBenchmarkRun(new LlmBenchmarkMetadata(
             runId,
             DateTimeOffset.UtcNow,
@@ -31,7 +31,8 @@ public sealed class BenchmarkOutputWriter
             runOptions.MaxOutputTokens,
             runOptions.ScenarioFilter ?? "all",
             runOptions.CategoryFilter ?? "all",
-            runOptions.LanguageFilter), []);
+            runOptions.LanguageFilter,
+            Suite: runOptions.Suite), []);
     }
 
     public void Write(LlmBenchmarkRun run)
@@ -56,14 +57,19 @@ public sealed class BenchmarkOutputWriter
             r.RepairOutputTokens.ToString(CultureInfo.InvariantCulture), r.TotalRepairTokens.ToString(CultureInfo.InvariantCulture),
             r.TokensToValidDiagram.ToString(CultureInfo.InvariantCulture), Csv(r.TokensToValidEquivalentDiagram?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
             r.SyntaxValid.ToString(), r.RenderSuccess.ToString(), r.RenderValid.ToString(), r.KindValid.ToString(), r.StructureValid.ToString(), r.SemanticValid.ToString(), r.EquivalentValid.ToString(),
-            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairType).Where(t => t is not null))),
+            r.FinalValid.ToString(), r.NormalizationApplied.ToString(), r.SourceCharacters.ToString(CultureInfo.InvariantCulture), r.SourceBytes.ToString(CultureInfo.InvariantCulture),
+            r.NonEmptyLines.ToString(CultureInfo.InvariantCulture), r.EquivalentOutputTokens.ToString(CultureInfo.InvariantCulture), r.Participants.ToString(CultureInfo.InvariantCulture),
+            r.Interactions.ToString(CultureInfo.InvariantCulture), Csv(r.OutputTokensPerParticipant?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty),
+            Csv(r.OutputTokensPerInteraction?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty), Csv(r.TokensToValidEquivalentDiagramPerInteraction?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty),
+            Csv(r.InteractionSizeBucket), Csv(string.Join("; ", r.SequenceFailureCategories)), Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairType).Where(t => t is not null))),
             Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairFailureCategory).Where(c => c is not null))),
             Csv(string.Join("; ", r.Attempts.Where(a => a.IsRepair).Select(a => a.RepairSuccessful?.ToString() ?? string.Empty))),
             r.Attempts.Count(a => a.IntroducedSyntaxFailure).ToString(CultureInfo.InvariantCulture), Csv(r.RepairStoppedReason ?? string.Empty), Csv(string.Join("; ", r.FailureReasons)), Csv(r.ErrorCategory ?? string.Empty)]));
 
-        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,firstPassEquivalentValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,repairTypes,repairFailureCategories,repairSuccesses,repairsIntroducedSyntaxFailure,repairStoppedReason,failureReasons,errorCategory", .. rows]);
+        return string.Join(Environment.NewLine, ["scenarioId,category,complexity,language,model,runNumber,inputTokens,outputTokens,totalTokens,firstPassValid,firstPassEquivalentValid,repairAttempts,repairInputTokens,repairOutputTokens,totalRepairTokens,tokensToValidDiagram,tokensToValidEquivalentDiagram,syntaxValid,renderSuccess,renderValid,kindValid,structureValid,semanticValid,equivalentValid,finalValid,normalizationApplied,sourceCharacters,sourceBytes,nonEmptyLines,equivalentOutputTokens,participants,interactions,outputTokensPerParticipant,outputTokensPerInteraction,ttvedPerInteraction,interactionSizeBucket,sequenceFailureCategories,repairTypes,repairFailureCategories,repairSuccesses,repairsIntroducedSyntaxFailure,repairStoppedReason,failureReasons,errorCategory", .. rows]);
     }
 
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     private static string Safe(string value) => string.Concat(value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-'));
+    private static string OutputPrefix(string suite) => suite == "sequence" ? "sequence-generation" : "llm-generation-cost";
 }

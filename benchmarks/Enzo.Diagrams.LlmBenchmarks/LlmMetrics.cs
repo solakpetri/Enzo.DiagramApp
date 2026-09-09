@@ -20,6 +20,8 @@ public sealed record LanguageAggregate(
     double? MedianTokensToValidEquivalentDiagram,
     int? MinimumTokensToValidEquivalentDiagram,
     int? MaximumTokensToValidEquivalentDiagram,
+    double? StandardDeviationTokensToValidEquivalentDiagram,
+    double? P90TokensToValidEquivalentDiagram,
     int EquivalentUnresolvedCount,
     double EquivalentFailureRatePercent,
     double AverageRepairAttempts,
@@ -42,7 +44,14 @@ public sealed record LanguageAggregate(
     int RepairsIntroducedSyntaxFailure,
     int IdenticalOutputRepairs,
     int OscillationRepairs,
-    int RunsUnresolvedAfterMaxAttempts);
+    int RunsUnresolvedAfterMaxAttempts,
+    double AverageSourceCharacters,
+    double AverageSourceBytes,
+    double AverageNonEmptyLines,
+    double AverageOutputTokensPerParticipant,
+    double AverageOutputTokensPerInteraction,
+    double AverageTokensToValidEquivalentDiagramPerInteraction,
+    double RepairRatePercent);
 
 public static class LlmMetrics
 {
@@ -73,6 +82,8 @@ public static class LlmMetrics
             NullableMedian(runs.Select(r => r.TokensToValidEquivalentDiagram)),
             NullableMin(runs.Select(r => r.TokensToValidEquivalentDiagram)),
             NullableMax(runs.Select(r => r.TokensToValidEquivalentDiagram)),
+            NullableStdDev(runs.Select(r => r.TokensToValidEquivalentDiagram)),
+            NullablePercentile(runs.Select(r => r.TokensToValidEquivalentDiagram), 0.9),
             equivalentFailures,
             Percent(equivalentFailures, runs.Count),
             Average(runs.Select(r => r.RepairAttempts)),
@@ -97,7 +108,14 @@ public static class LlmMetrics
             repairs.Count(repair => repair.TwoAttemptsBack is not null
                 && repair.Current.NormalizedSource != repair.Previous.NormalizedSource
                 && repair.Current.NormalizedSource == repair.TwoAttemptsBack.NormalizedSource),
-            runs.Count(r => !r.EquivalentValid && r.ErrorCategory == "validation" && r.RepairStoppedReason is null));
+            runs.Count(r => !r.EquivalentValid && r.ErrorCategory == "validation" && r.RepairStoppedReason is null),
+            Average(runs.Where(r => r.EquivalentValid).Select(r => r.SourceCharacters)),
+            Average(runs.Where(r => r.EquivalentValid).Select(r => r.SourceBytes)),
+            Average(runs.Where(r => r.EquivalentValid).Select(r => r.NonEmptyLines)),
+            NullableAverageDouble(runs.Select(r => r.OutputTokensPerParticipant)),
+            NullableAverageDouble(runs.Select(r => r.OutputTokensPerInteraction)),
+            NullableAverageDouble(runs.Select(r => r.TokensToValidEquivalentDiagramPerInteraction)),
+            Percent(runs.Count(r => r.RepairAttempts > 0), runs.Count));
     }
 
     public static double Difference(double enzoValue, double mermaidValue) => mermaidValue == 0 ? 0 : (mermaidValue - enzoValue) / mermaidValue * 100;
@@ -177,6 +195,36 @@ public static class LlmMetrics
     private static IEnumerable<int> NullableValues(IEnumerable<int?> values) => values.Where(value => value.HasValue).Select(value => value!.Value);
     private static int? NullableMin(IEnumerable<int?> values) => NullableValues(values).Cast<int?>().Min();
     private static int? NullableMax(IEnumerable<int?> values) => NullableValues(values).Cast<int?>().Max();
+
+    private static double NullableAverageDouble(IEnumerable<double?> values)
+    {
+        var array = values.Where(value => value.HasValue).Select(value => value!.Value).ToArray();
+        return array.Length == 0 ? 0 : array.Average();
+    }
+
+    private static double? NullableStdDev(IEnumerable<int?> values)
+    {
+        var array = NullableValues(values).Select(value => (double)value).ToArray();
+        if (array.Length == 0)
+        {
+            return null;
+        }
+
+        var average = array.Average();
+        return Math.Sqrt(array.Sum(value => Math.Pow(value - average, 2)) / array.Length);
+    }
+
+    private static double? NullablePercentile(IEnumerable<int?> values, double percentile)
+    {
+        var ordered = NullableValues(values).Order().ToArray();
+        if (ordered.Length == 0)
+        {
+            return null;
+        }
+
+        var index = (int)Math.Ceiling(percentile * ordered.Length) - 1;
+        return ordered[Math.Clamp(index, 0, ordered.Length - 1)];
+    }
 
     private static bool IsSemanticRepair(GenerationAttempt attempt) =>
         attempt.IsRepair && (HasRepairType(attempt, "Kind") || HasRepairType(attempt, "Structure") || HasRepairType(attempt, "Semantic"));

@@ -17,7 +17,7 @@ public sealed class LlmBenchmarkRunner(
         }
 
         var settings = new ModelSettings(options.Model, options.Temperature, options.TopP, options.MaxOutputTokens);
-        var scenarios = ScenarioLoader.Load(scenariosDirectory)
+        var scenarios = ScenarioLoader.Load(SuiteDirectory(scenariosDirectory, options.Suite))
             .Where(s => options.ScenarioFilter is null || s.Id.Equals(options.ScenarioFilter, StringComparison.OrdinalIgnoreCase))
             .Where(s => options.CategoryFilter is null || s.Category.Equals(options.CategoryFilter, StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -118,6 +118,7 @@ public sealed class LlmBenchmarkRunner(
         var normalized = SourceNormalizer.RemoveMarkdownFence(response.Source);
         var validation = await validators[language].ValidateAsync(normalized.Source, cancellationToken);
         var semantic = SemanticDiagramValidator.Validate(scenario, language, normalized.Source, validation.SyntaxValid, validation.RenderSuccess);
+        var failureCategories = SequenceFailureClassifier.Classify(scenario, normalized.Source, validation, semantic);
         return new GenerationAttempt(
             attemptNumber,
             isRepair,
@@ -142,7 +143,8 @@ public sealed class LlmBenchmarkRunner(
             repairType,
             repairFailureCategory,
             failedAttempt is null ? null : RepairResolved(failedAttempt, validation, semantic),
-            failedAttempt?.SyntaxValid == true && !validation.SyntaxValid);
+            failedAttempt?.SyntaxValid == true && !validation.SyntaxValid,
+            failureCategories);
     }
 
     private static bool RepairResolved(GenerationAttempt failedAttempt, ValidationOutcome validation, SemanticValidationResult semantic)
@@ -176,7 +178,18 @@ public sealed class LlmBenchmarkRunner(
     }
 
     private static LlmRunResult Result(DiagramScenario scenario, string language, string model, int runNumber, IReadOnlyList<GenerationAttempt> attempts, string? errorCategory, string? repairStoppedReason) =>
-        new(scenario.Id, scenario.Category, scenario.Complexity, language, model, runNumber, attempts, errorCategory) { RepairStoppedReason = repairStoppedReason };
+        new(scenario.Id, scenario.Category, scenario.Complexity, language, model, runNumber, attempts, errorCategory)
+        {
+            RepairStoppedReason = repairStoppedReason,
+            ExpectedMinimumInteractionCount = scenario.Expectations.MinimumInteractionCount
+        };
+
+    private static string SuiteDirectory(string scenariosDirectory, string suite) => suite switch
+    {
+        "all" => scenariosDirectory,
+        "sequence" => Path.Combine(scenariosDirectory, "sequence-generation"),
+        _ => Path.Combine(scenariosDirectory, suite)
+    };
 
     private static IReadOnlyList<string> Languages(string filter) => filter switch
     {
