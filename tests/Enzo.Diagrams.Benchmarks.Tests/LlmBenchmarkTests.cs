@@ -142,6 +142,88 @@ public sealed class LlmBenchmarkTests
     }
 
     [Fact]
+    public void BuildUserPrompt_EnzoSequenceAddsCompactCompletenessCheck()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("Silently check all listed requirements and Enzo sequence syntax", prompt);
+        Assert.Contains("Return source only; no Markdown/explanations", prompt);
+        Assert.DoesNotContain("checklist", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceTreatsRequiredParticipantsAsMandatory()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("- Mandatory participants:", prompt);
+        Assert.Contains("- Shopper", prompt);
+        Assert.Contains("- Order API", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceRepresentsRequiredConcepts()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("- Represent these concepts:", prompt);
+        Assert.Contains("- approved", prompt);
+        Assert.DoesNotContain("RequiredConcepts", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceInteractionMinimumAppearsOnceAsMinimum()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Equal(1, CountOccurrences(prompt, "Use at least 12 interactions"));
+        Assert.DoesNotContain("At least 12 interactions", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceSurfacesRequiredInteractions()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("- Required interactions:", prompt);
+        Assert.Contains("- Order API -> Payment Service", prompt);
+        Assert.Contains("- Payment Service -> Fraud Service: risk check", prompt);
+        Assert.DoesNotContain("RequiredInteractions", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceReturnsSourceOnlyAndKeepsKindEnforcement()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.Contains("Return source only", prompt);
+        Assert.Contains("no Markdown/explanations", prompt);
+        Assert.Contains("Use Enzo `sequence` syntax, not `flow` or `bpmn`.", prompt);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequenceDoesNotIncludeFlowOrProcessGuidance()
+    {
+        var prompt = GenerationPromptBuilder.BuildUserPrompt(RichSequenceScenario(), DiagramLanguages.Enzo);
+
+        Assert.DoesNotContain("cycle", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("acyclic", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("gateway", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("business process", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildUserPrompt_EnzoSequencePromptTokenImpactStaysSmall()
+    {
+        var scenarios = ScenarioLoader.Load(Path.Combine(RepositoryRoot(), "benchmarks", "scenarios", "sequence-generation"));
+        var tokenDeltas = scenarios
+            .Select(scenario => CountPromptTokens(GenerationPromptBuilder.BuildUserPrompt(scenario, DiagramLanguages.Enzo)) - CountPromptTokens(BuildLegacyUserPrompt(scenario, DiagramLanguages.Enzo)))
+            .ToList();
+
+        Assert.All(tokenDeltas, delta => Assert.True(delta <= 10, $"Prompt token delta was {delta}."));
+    }
+
+    [Fact]
     public async Task RunAsync_WrongKindCanBeRepairedToEquivalent()
     {
         var output = TempDirectory();
@@ -408,6 +490,96 @@ public sealed class LlmBenchmarkTests
         Assert.False(Assert.Single(enriched.Results).EquivalentValid);
         Assert.Contains("Expected sequence", Assert.Single(enriched.Results).FailureReasons[0]);
     }
+
+    private static DiagramScenario RichSequenceScenario() => new(
+        "sequence-order-payment-risk",
+        "sequence",
+        "complex",
+        "Show checkout approval with payment and fraud review.",
+        string.Empty,
+        string.Empty,
+        new DiagramExpectations(
+            "sequence",
+            ["shopper", "order api", "payment service", "fraud service", "approved"],
+            MinimumParticipantCount: 4,
+            MinimumInteractionCount: 12,
+            RequiredParticipants: ["Shopper", "Order API", "Payment Service", "Fraud Service"],
+            RequiredInteractions: [new RequiredInteraction("Order API", "Payment Service"), new RequiredInteraction("Payment Service", "Fraud Service", "risk check")]));
+
+    private static int CountPromptTokens(string prompt) => new MetricCalculator("cl100k_base").Calculate(prompt, 0, 0).Tokens;
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
+    }
+
+    private static string BuildLegacyUserPrompt(DiagramScenario scenario, string language)
+    {
+        var contract = GenerationContract.From(scenario);
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine($"Create a {contract.ExpectedKind} diagram for this request:");
+        builder.AppendLine();
+        builder.AppendLine(scenario.Prompt);
+        builder.AppendLine();
+        builder.AppendLine("Requirements:");
+        builder.AppendLine($"- Diagram kind: {contract.ExpectedKind}");
+        if (contract.RequiredConcepts.Count > 0)
+        {
+            builder.AppendLine("- Include these concepts:");
+            foreach (var concept in contract.RequiredConcepts)
+            {
+                builder.AppendLine($"  - {concept}");
+            }
+        }
+
+        if (contract.RequiredParticipants.Count > 0)
+        {
+            builder.AppendLine("- Include these participants:");
+            foreach (var participant in contract.RequiredParticipants)
+            {
+                builder.AppendLine($"  - {participant}");
+            }
+        }
+
+        if (contract.RequiredInteractions.Count > 0)
+        {
+            builder.AppendLine("- Include these participant interactions:");
+            foreach (var interaction in contract.RequiredInteractions)
+            {
+                builder.AppendLine($"  - {interaction.From} -> {interaction.To}{(interaction.Label is null ? string.Empty : $": {interaction.Label}")}");
+            }
+        }
+
+        foreach (var (value, label) in LegacyMinimums(contract))
+        {
+            if (value is not null)
+            {
+                builder.AppendLine($"- At least {value} {label}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Return the complete diagram source only. Do not use Markdown fences or explanations.");
+        builder.AppendLine(GenerationPromptBuilder.LanguageKindInstruction(language, contract.ExpectedKind));
+        return builder.ToString().TrimEnd();
+    }
+
+    private static IEnumerable<(int? Value, string Label)> LegacyMinimums(GenerationContract contract) =>
+    [
+        (contract.MinimumNodeCount, "nodes"),
+        (contract.MinimumEdgeCount, "edges"),
+        (contract.MinimumDecisionCount, "decisions"),
+        (contract.MinimumParticipantCount, "participants"),
+        (contract.MinimumInteractionCount, "interactions")
+    ];
 
     private static GenerationAttempt Attempt(int number, bool repair, int input, int output, bool valid, bool equivalent = false) =>
         new(number, repair, input, output, input + output, valid ? "valid" : "bad", valid ? "valid" : "bad", false, valid, valid, valid ? null : "invalid", 1, valid, valid, equivalent, equivalent, equivalent, equivalent, equivalent ? [] : ["not equivalent"], null);

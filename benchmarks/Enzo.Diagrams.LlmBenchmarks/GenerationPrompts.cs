@@ -35,6 +35,7 @@ public static class GenerationPromptBuilder
     public static string BuildUserPrompt(DiagramScenario scenario, string language)
     {
         var contract = GenerationContract.From(scenario);
+        var isEnzoSequence = language == DiagramLanguages.Enzo && contract.ExpectedKind == "sequence";
         var builder = new StringBuilder();
         builder.AppendLine($"Create a {contract.ExpectedKind} diagram for this request:");
         builder.AppendLine();
@@ -44,7 +45,7 @@ public static class GenerationPromptBuilder
         builder.AppendLine($"- Diagram kind: {contract.ExpectedKind}");
         if (contract.RequiredConcepts.Count > 0)
         {
-            builder.AppendLine("- Include these concepts:");
+            builder.AppendLine(isEnzoSequence ? "- Represent these concepts:" : "- Include these concepts:");
             foreach (var concept in contract.RequiredConcepts)
             {
                 builder.AppendLine($"  - {concept}");
@@ -53,7 +54,7 @@ public static class GenerationPromptBuilder
 
         if (contract.RequiredParticipants.Count > 0)
         {
-            builder.AppendLine("- Include these participants:");
+            builder.AppendLine(isEnzoSequence ? "- Mandatory participants:" : "- Include these participants:");
             foreach (var participant in contract.RequiredParticipants)
             {
                 builder.AppendLine($"  - {participant}");
@@ -62,7 +63,7 @@ public static class GenerationPromptBuilder
 
         if (contract.RequiredInteractions.Count > 0)
         {
-            builder.AppendLine("- Include these participant interactions:");
+            builder.AppendLine(isEnzoSequence ? "- Required interactions:" : "- Include these participant interactions:");
             foreach (var interaction in contract.RequiredInteractions)
             {
                 builder.AppendLine($"  - {interaction.From} -> {interaction.To}{(interaction.Label is null ? string.Empty : $": {interaction.Label}")}");
@@ -73,11 +74,11 @@ public static class GenerationPromptBuilder
         {
             if (value is not null)
             {
-                builder.AppendLine($"- At least {value} {label}");
+                builder.AppendLine(isEnzoSequence && label == "interactions" ? $"- Use at least {value} interactions" : $"- At least {value} {label}");
             }
         }
         builder.AppendLine();
-        builder.AppendLine("Return the complete diagram source only. Do not use Markdown fences or explanations.");
+        builder.AppendLine(SourceOnlyInstruction(language, contract.ExpectedKind));
         builder.AppendLine(LanguageKindInstruction(language, contract.ExpectedKind));
         return builder.ToString().TrimEnd();
     }
@@ -144,6 +145,10 @@ public static class GenerationPromptBuilder
         (DiagramLanguages.Mermaid, "process") => "Use Mermaid `flowchart TD` syntax to represent a process, not `sequenceDiagram`.",
         _ => language == DiagramLanguages.Enzo ? "Use valid Enzo syntax." : "Use valid Mermaid syntax."
     };
+
+    private static string SourceOnlyInstruction(string language, string expectedKind) => language == DiagramLanguages.Enzo && expectedKind == "sequence"
+        ? "Silently check all listed requirements and Enzo sequence syntax. Return source only; no Markdown/explanations."
+        : "Return the complete diagram source only. Do not use Markdown fences or explanations.";
 
     internal static IEnumerable<string> RepairProblems(GenerationAttempt attempt)
     {
