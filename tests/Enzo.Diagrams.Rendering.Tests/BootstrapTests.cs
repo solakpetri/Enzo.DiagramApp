@@ -183,6 +183,72 @@ public sealed class BootstrapTests
         Assert.DoesNotContain("font-family=\"Arial", svg);
     }
 
+    [Fact]
+    public void FlowchartSvgRenderer_EscapesUserControlledText()
+    {
+        var payload = InjectionPayload();
+        var diagram = new Flowchart(
+            "Injection",
+            [
+                new FlowchartNode(FlowchartNodeKind.Start, "Begin", payload),
+                new FlowchartNode(FlowchartNodeKind.End, "Done", "Done")
+            ],
+            [new FlowchartEdge("Begin", "Done", payload)]);
+
+        var svg = FlowchartSvgRenderer.Render(FlowchartLayoutEngine.Layout(diagram));
+
+        AssertEscaped(svg);
+    }
+
+    [Fact]
+    public void SequenceSvgRenderer_EscapesUserControlledText()
+    {
+        var payload = InjectionPayload();
+        var diagram = new SequenceDiagram(
+            "Injection",
+            [
+                new SequenceParticipant(SequenceParticipantKind.Actor, "User", DisplayName: payload),
+                new SequenceParticipant(SequenceParticipantKind.Participant, "Api", DisplayName: "API")
+            ],
+            [new SequenceMessage("User", "Api", SequenceMessageKind.Synchronous, payload)]);
+
+        var svg = SequenceSvgRenderer.Render(SequenceLayoutEngine.Layout(diagram));
+
+        AssertEscaped(svg);
+    }
+
+    [Fact]
+    public void BpmnSvgRenderer_EscapesUserControlledText()
+    {
+        var payload = InjectionPayload();
+        var diagram = new BpmnDiagram(
+            "Injection",
+            [
+                new BpmnElement(BpmnElementKind.StartEvent, "Begin", payload),
+                new BpmnElement(BpmnElementKind.EndEvent, "Done", "Done")
+            ],
+            [new BpmnSequenceFlow("Begin", "Done", payload)]);
+
+        var svg = BpmnSvgRenderer.Render(BpmnLayoutEngine.Layout(diagram));
+
+        AssertEscaped(svg);
+    }
+
+    [Fact]
+    public void PngRenderer_RejectsExcessiveDimensions()
+    {
+        const string svg = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+            <rect width="200" height="200" fill="#fff" />
+            </svg>
+            """;
+
+        var exception = Assert.Throws<FlowchartPngRenderException>(() => FlowchartPngRenderer.Render(svg, 100, 100, 10_000));
+
+        Assert.Equal("SVG dimensions exceed configured PNG rendering limits.", exception.Message);
+    }
+
     private static int CountChangedPixels(byte[] firstPng, byte[] secondPng)
     {
         using var first = SKBitmap.Decode(firstPng);
@@ -227,5 +293,21 @@ public sealed class BootstrapTests
 
             result = result.Remove(start, end - start + "</text>".Length);
         }
+    }
+
+    private static string InjectionPayload()
+    {
+        return "</text><script>alert(1)</script><foreignObject onload=alert(1)>\"&<image href=javascript:alert(1)>";
+    }
+
+    private static void AssertEscaped(string svg)
+    {
+        Assert.Contains("&lt;script&gt;", svg);
+        Assert.Contains("&lt;/text&gt;", svg);
+        Assert.Contains("&lt;foreignObject", svg);
+        Assert.DoesNotContain("<script", svg);
+        Assert.DoesNotContain("<foreignObject", svg);
+        Assert.DoesNotContain("<image", svg);
+        Assert.DoesNotContain("</text><", svg);
     }
 }

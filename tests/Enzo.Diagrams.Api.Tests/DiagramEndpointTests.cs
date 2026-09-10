@@ -187,6 +187,8 @@ public sealed class DiagramEndpointTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Contains("default-src 'none'", response.Headers.GetValues("Content-Security-Policy").Single());
         var svg = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("<?xml", svg);
         Assert.Contains("<svg", svg);
@@ -295,8 +297,21 @@ public sealed class DiagramEndpointTests
         var imageResponse = await client.GetAsync(root.GetProperty("url").GetString());
         imageResponse.EnsureSuccessStatusCode();
         Assert.Equal("image/png", imageResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", imageResponse.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("no-store, max-age=0", imageResponse.Headers.CacheControl?.ToString());
         var png = await imageResponse.Content.ReadAsByteArrayAsync();
         Assert.True(png.Take(PngSignature.Length).SequenceEqual(PngSignature));
+    }
+
+    [Fact]
+    public async Task HostedRenderResult_InvalidIdShape_ReturnsNotFound()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/v1/render-results/not-an-id");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -342,6 +357,26 @@ public sealed class DiagramEndpointTests
         Assert.Contains("Hosted render storage is unavailable.", body);
         Assert.DoesNotContain(secret, body);
         Assert.DoesNotContain("AccountKey", body);
+    }
+
+    [Fact]
+    public async Task Render_UnexpectedProductionFailure_ReturnsGenericProblemDetails()
+    {
+        const string secret = "sensitive-storage-detail";
+        await using var factory = CreateProductionFactory(new UnexpectedFailingRenderResultStore(secret));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png",
+            delivery = "url"
+        });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("An unexpected error occurred.", body);
+        Assert.DoesNotContain(secret, body);
     }
 
     [Fact]
@@ -423,6 +458,72 @@ public sealed class DiagramEndpointTests
         using var json = await JsonDocument.ParseAsync(content);
         Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
             error.GetProperty("code").GetString() == "UnknownMessageTarget");
+    }
+
+    [Fact]
+    public async Task Validate_RequestBodyOverLimit_ReturnsPayloadTooLarge()
+    {
+        await using var factory = CreateFactory(("Enzo:Limits:MaxRequestBodyBytes", "1024"));
+        using var client = CreateAuthenticatedClient(factory);
+        using var content = new StringContent("{\"source\":\"" + new string('a', 2_000) + "\"}", Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync("/v1/validate", content);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        await using var responseContent = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(responseContent);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "request_too_large");
+    }
+
+    [Fact]
+    public async Task Validate_SourceOverLimit_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory(("Enzo:Limits:MaxSourceCharacters", "1024"));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new { source = new string('a', 1_025) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "source_too_large");
+    }
+
+    [Fact]
+    public async Task Validate_DiagramOverElementLimit_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory(("Enzo:Limits:MaxDiagramElements", "10"));
+        using var client = CreateAuthenticatedClient(factory);
+        var source = "sequence Big\n" + string.Join("\n", Enumerable.Range(0, 11).Select(index => $"participant P{index}")) + "\nP0 -> P1: Request";
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new { source });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "diagram_too_complex");
+    }
+
+    [Fact]
+    public async Task Render_PngOverPixelLimit_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory(("Enzo:Limits:MaxPngPixels", "10000"));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "png"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "png_render_failed");
     }
 
     [Fact]
@@ -526,6 +627,33 @@ public sealed class DiagramEndpointTests
     }
 
     [Fact]
+    public async Task Validate_MultipleApiKeyHeaders_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/validate")
+        {
+            Content = JsonContent.Create(new { source = ValidSource })
+        };
+        request.Headers.Add("X-API-Key", [ApiKey, ApiKey]);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void Production_BlankApiKey_FailsStartup()
+    {
+        using var factory = new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("Enzo:ApiKey must be configured in production.", exception.Message);
+    }
+
+    [Fact]
     public async Task Render_CorrectApiKey_ReturnsSvg()
     {
         await using var factory = CreateFactory();
@@ -619,6 +747,21 @@ public sealed class DiagramEndpointTests
             });
     }
 
+    private static WebApplicationFactory<global::Program> CreateProductionFactory(IRenderResultStore store)
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Production");
+                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<IRenderResultStore>();
+                    services.AddSingleton(store);
+                });
+            });
+    }
+
     private static WebApplicationFactory<global::Program> CreateFactory(params (string Key, string Value)[] settings)
     {
         return new WebApplicationFactory<global::Program>()
@@ -677,6 +820,19 @@ public sealed class DiagramEndpointTests
             CancellationToken cancellationToken)
         {
             throw new RenderResultStoreException(message);
+        }
+    }
+
+    private sealed class UnexpectedFailingRenderResultStore(string message) : IRenderResultStore
+    {
+        public ValueTask<StoredRenderResult> StoreAsync(
+            byte[] bytes,
+            string contentType,
+            TimeSpan lifetime,
+            Uri requestBaseUri,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(message);
         }
     }
 }
