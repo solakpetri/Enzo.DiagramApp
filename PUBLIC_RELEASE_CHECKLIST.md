@@ -2,12 +2,12 @@
 
 ## Security
 
-- [ ] No secrets in current files.
-- [ ] Git history reviewed.
+- [x] No secrets in current files.
+- [x] Git history reviewed.
 - [ ] Production credentials rotated if ever exposed.
-- [ ] SVG injection protections tested.
-- [ ] API limits reviewed.
-- [ ] GitHub Actions permissions reviewed.
+- [x] SVG injection protections tested.
+- [x] API limits reviewed.
+- [x] GitHub Actions permissions reviewed.
 
 ## Azure Shutdown
 
@@ -31,12 +31,12 @@
 ## Repository
 
 - [ ] README reviewed.
-- [ ] BENCHMARKS.md reviewed.
+- [x] BENCHMARKS.md reviewed.
 - [x] SECURITY.md added.
 - [x] CONTRIBUTING.md added.
 - [ ] License confirmed. No root repository license file is currently present.
 - [ ] Examples work from clean clone.
-- [ ] Tests pass.
+- [x] Tests pass.
 
 ## GitHub About Recommendation
 
