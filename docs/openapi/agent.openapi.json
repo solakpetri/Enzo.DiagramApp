@@ -3,11 +3,11 @@
   "info": {
     "title": "Enzo.Diagrams Agent API",
     "version": "1.0.0",
-    "description": "Agent-ready contract for deterministic Enzo.Diagrams validation and rendering. Agents should generate only Enzo.Diagrams DSL, validate it, correct errors when validation fails, and render only valid DSL. Use hosted PNG delivery when an inline image URL is needed. Do not generate Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes."
+    "description": "Agent-ready contract for deterministic Enzo.Diagrams validation and rendering. Agents should generate only Enzo.Diagrams DSL, validate it, correct errors when validation fails, and render only valid DSL. Use hosted PNG delivery when a self-hosted API should return a temporary image URL. Do not generate Mermaid, PlantUML, Graphviz, BPMN XML, raw SVG, or image bytes."
   },
   "servers": [
     {
-      "url": "https://enzo-diagrams-api.gentlebeach-2a13ea58.northeurope.azurecontainerapps.io"
+      "url": "http://localhost:5085"
     }
   ],
   "paths": {
@@ -71,7 +71,7 @@
         "operationId": "renderDiagram",
         "tags": ["Diagrams"],
         "summary": "Render Enzo.Diagrams DSL.",
-        "description": "Parses, validates, lays out, and renders Enzo.Diagrams DSL as SVG or PNG. Delivery defaults to raw bytes. Use format png with delivery url when an agent needs a short-lived hosted image URL that points to the actual generated diagram image and can be presented to the user. Call renderDiagram only after valid DSL has been produced.",
+        "description": "Parses, validates, lays out, and renders Enzo.Diagrams DSL as SVG or PNG. Delivery defaults to raw bytes. Use format png with delivery url when a self-hosted API should return a short-lived hosted image URL that points to the actual generated diagram image. Call renderDiagram only after valid DSL has been produced.",
         "security": [
           {
             "ApiKey": []
@@ -181,7 +181,7 @@
           "delivery": {
             "type": ["string", "null"],
             "enum": ["raw", "url", null],
-            "description": "Result delivery mode. Omit or use raw to receive the rendered SVG/PNG response body. Use url with format png to receive hosted PNG metadata for inline image presentation."
+            "description": "Result delivery mode. Omit or use raw to receive the rendered SVG/PNG response body. Use url with format png to receive hosted PNG metadata from a self-hosted API."
           }
         }
       },
@@ -204,7 +204,7 @@
           "url": {
             "type": "string",
             "format": "uri",
-            "description": "Short-lived read-only HTTPS URL for the actual Enzo-rendered PNG. Present this image URL directly to the user; do not redraw or regenerate the diagram."
+            "description": "Short-lived read-only URL for the actual Enzo-rendered PNG. Present this image URL directly to the user when appropriate; do not redraw or regenerate the diagram."
           },
           "expiresAt": {
             "type": "string",
@@ -226,6 +226,7 @@
       "EnzoDiagramSource": {
         "type": "string",
         "minLength": 1,
+        "maxLength": 32768,
         "description": "Enzo.Diagrams DSL source. Do not use Mermaid, PlantUML, Graphviz, BPMN XML, or raw SVG. Flowcharts start with flow <Name>. Supported flow declarations are start, task, decision, and end. Flow connections use Source -> Target, with optional labels as Source -> Target : label. Example: flow Example\nstart Begin \"Start\"\ntask Work \"Process\"\ndecision Valid \"Valid?\"\nend Done \"Done\"\nBegin -> Work\nWork -> Valid\nValid -> Done : yes. The keyword node is invalid. Mermaid-style square-bracket node syntax must not be used. Sequence diagrams start with sequence <Name>. Declare actor and participant entries. Messages use Source -> Target: label, with --> allowed for response-style messages. Example: sequence Checkout\nactor Customer \"Customer\"\nparticipant Web \"Web App\"\nparticipant Api \"Order API\"\nCustomer -> Web: Click checkout\nWeb -> Api: POST /orders\nApi --> Web: 201 Created. BPMN diagrams start with bpmn <Name>. Supported BPMN declarations are start, task, gateway, and end. Sequence flows use Source -> Target, with optional labels as Source -> Target : label. Example: bpmn Fulfillment\nstart Received\ntask Validate \"Validate order\"\ngateway Valid \"Order valid?\"\ntask Ship \"Ship order\"\nend Completed\nReceived -> Validate\nValidate -> Valid\nValid -> Ship : yes\nShip -> Completed.",
         "examples": [
           "flow Example\nstart Begin \"Start\"\ntask Work \"Process\"\ndecision Valid \"Valid?\"\nend Done \"Done\"\nBegin -> Work\nWork -> Valid\nValid -> Done : yes",

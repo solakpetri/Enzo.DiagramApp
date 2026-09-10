@@ -1,6 +1,6 @@
 # API Authentication
 
-The hosted Enzo.Diagrams API uses lightweight API-key authentication for diagram validation and rendering.
+The Enzo Diagrams HTTP API uses lightweight API-key authentication for diagram validation and rendering.
 
 ## Protected Endpoints
 
@@ -10,7 +10,7 @@ The hosted Enzo.Diagrams API uses lightweight API-key authentication for diagram
 Send the key in this request header:
 
 ```text
-X-API-Key: <your-api-key>
+X-API-Key: YOUR_ENZO_API_KEY
 ```
 
 Requests with a missing, empty, or incorrect key return `401 Unauthorized` with a concise ProblemDetails response.
@@ -42,25 +42,16 @@ The checked-in `appsettings.json` contains an empty value only as a configuratio
 For local development, set the environment variable before starting the API:
 
 ```powershell
-$env:Enzo__ApiKey = "<local-development-key>"
+$env:Enzo__ApiKey = "YOUR_LOCAL_API_KEY"
 dotnet run --project src/Enzo.Diagrams.Api --urls http://localhost:5085
 ```
 
 Production startup fails if `Enzo:ApiKey` is missing or blank.
 
-## Azure Container Apps
+## Self-hosting
 
-Configure the key as an Azure Container Apps secret and map it to the .NET configuration environment variable:
+For self-hosted deployments, configure `Enzo:ApiKey` through the hosting platform's secret or environment-variable mechanism. Do not place the raw key in source-controlled configuration.
 
-1. Create a secret such as `enzo-api-key` containing the generated API key.
-2. Reference that secret from the container app environment variable `Enzo__ApiKey`.
-3. Do not place the raw API key in source-controlled configuration.
+The checked-in example file `src/Enzo.Diagrams.Api/appsettings.Development.example.json` shows the local configuration shape with placeholders only.
 
-Example Azure CLI shape:
-
-```bash
-az containerapp secret set --name <app-name> --resource-group <resource-group> --secrets enzo-api-key=<generated-api-key>
-az containerapp update --name <app-name> --resource-group <resource-group> --set-env-vars Enzo__ApiKey=secretref:enzo-api-key
-```
-
-Key Vault is intentionally not provisioned in this branch.
+The previous Azure Container Apps deployment is retired. See [Historical Azure Deployment](azure-container-deployment.md) for context.
