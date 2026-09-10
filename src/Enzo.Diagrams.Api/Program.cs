@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Azure;
 using Enzo.Diagrams.Api;
 using Enzo.Diagrams.Language;
 using Enzo.Diagrams.Rendering;
@@ -15,6 +16,7 @@ builder.Services.AddOptions<EnzoOptions>()
     .Validate(options => !builder.Environment.IsProduction() || !string.IsNullOrWhiteSpace(options.ApiKey),
         "Enzo:ApiKey must be configured in production.")
     .Validate(ValidateRenderResultOptions, "Enzo:RenderResults is invalid.")
+    .Validate(options => ValidateRequestLimits(options.Limits), "Enzo:Limits is invalid.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(serviceProvider =>
@@ -38,8 +40,6 @@ builder.Services.AddSingleton<IRenderResultStore>(serviceProvider =>
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
 });
 builder.Services.AddOpenApi("v1", options =>
 {
@@ -49,22 +49,46 @@ builder.Services.AddOpenApi("v1", options =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return Results.Problem(
+                title: "Server error.",
+                detail: "An unexpected error occurred.",
+                statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
+        });
+    });
+}
+
 app.MapOpenApi();
 
-app.MapPost("/v1/validate", async (HttpRequest httpRequest, CancellationToken cancellationToken) =>
+app.MapPost("/v1/validate", async (
+    HttpRequest httpRequest,
+    IOptions<EnzoOptions> options,
+    CancellationToken cancellationToken) =>
 {
-    var (request, readError) = await ReadRequestAsync<ValidateDiagramRequest>(httpRequest, cancellationToken);
+    var limits = options.Value.Limits;
+    var (request, readError) = await ReadRequestAsync<ValidateDiagramRequest>(httpRequest, limits, cancellationToken);
     if (readError is not null)
     {
         return readError;
     }
 
-    if (!TryGetSource(request!.Source, out var source, out var inputError))
+    if (!TryGetSource(request!.Source, limits, out var source, out var inputError))
     {
         return inputError;
     }
 
     var result = DiagramParser.Parse(source);
+    if (result.IsSuccess && !TryEnforceDiagramLimits(result, limits, out var limitError))
+    {
+        return limitError;
+    }
+
     return result.IsSuccess
         ? Results.Ok(new ValidateDiagramResponse(true))
         : DiagramProblem(result);
@@ -85,13 +109,14 @@ app.MapPost("/v1/render", async (
     IOptions<EnzoOptions> options,
     CancellationToken cancellationToken) =>
 {
-    var (request, readError) = await ReadRequestAsync<RenderDiagramRequest>(httpRequest, cancellationToken);
+    var limits = options.Value.Limits;
+    var (request, readError) = await ReadRequestAsync<RenderDiagramRequest>(httpRequest, limits, cancellationToken);
     if (readError is not null)
     {
         return readError;
     }
 
-    if (!TryGetSource(request!.Source, out var source, out var inputError))
+    if (!TryGetSource(request!.Source, limits, out var source, out var inputError))
     {
         return inputError;
     }
@@ -131,13 +156,18 @@ app.MapPost("/v1/render", async (
         return DiagramProblem(result);
     }
 
+    if (!TryEnforceDiagramLimits(result, limits, out var limitError))
+    {
+        return limitError;
+    }
+
     var svg = DiagramSvgRenderer.Render(result);
 
     if (string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase))
     {
         try
         {
-            var png = FlowchartPngRenderer.Render(svg);
+            var png = FlowchartPngRenderer.Render(svg, limits.MaxPngWidth, limits.MaxPngHeight, limits.MaxPngPixels);
             if (string.Equals(delivery, "url", StringComparison.OrdinalIgnoreCase))
             {
                 var storedResult = await renderResultStore.StoreAsync(
@@ -155,6 +185,7 @@ app.MapPost("/v1/render", async (
                     storedResult.ExpiresAt));
             }
 
+            SetImageSecurityHeaders(httpRequest.HttpContext.Response);
             return Results.File(png, "image/png");
         }
         catch (FlowchartPngRenderException)
@@ -171,12 +202,13 @@ app.MapPost("/v1/render", async (
         {
             return HostedRenderStorageProblem("The rendered diagram could not be stored.");
         }
-        catch (Azure.RequestFailedException)
+        catch (RequestFailedException)
         {
             return HostedRenderStorageProblem("The rendered diagram could not be stored.");
         }
     }
 
+    SetSvgSecurityHeaders(httpRequest.HttpContext.Response);
     return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
 })
 .WithName("RenderDiagram")
@@ -238,12 +270,19 @@ app.MapPost("/v1/render", async (
 .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
-app.MapGet("/v1/render-results/{id}", async (
+app.MapGet("/v1/render-results/{id:regex(^[a-f0-9]{{32}}$)}", async (
     string id,
+    HttpResponse response,
     ILocalRenderResultReader renderResultReader,
     CancellationToken cancellationToken) =>
 {
     var result = await renderResultReader.GetAsync(id, cancellationToken);
+    if (result is not null)
+    {
+        SetImageSecurityHeaders(response);
+        response.Headers["Cache-Control"] = "no-store, max-age=0";
+    }
+
     return result is null
         ? Results.NotFound()
         : Results.File(result.Bytes, result.ContentType);
@@ -255,11 +294,38 @@ app.Run();
 
 static async Task<(T? Request, IResult? Error)> ReadRequestAsync<T>(
     HttpRequest httpRequest,
+    RequestLimitOptions limits,
     CancellationToken cancellationToken)
 {
+    if (httpRequest.ContentLength > limits.MaxRequestBodyBytes)
+    {
+        return (default, PayloadTooLargeProblem(limits.MaxRequestBodyBytes));
+    }
+
     try
     {
-        var request = await httpRequest.ReadFromJsonAsync<T>(cancellationToken);
+        await using var buffer = new MemoryStream();
+        var bytesRead = 0;
+        var chunk = new byte[8192];
+        while (true)
+        {
+            var read = await httpRequest.Body.ReadAsync(chunk, cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            bytesRead += read;
+            if (bytesRead > limits.MaxRequestBodyBytes)
+            {
+                return (default, PayloadTooLargeProblem(limits.MaxRequestBodyBytes));
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        buffer.Position = 0;
+        var request = await JsonSerializer.DeserializeAsync<T>(buffer, JsonSerializerOptions.Web, cancellationToken);
         return request is null
             ? (default, InvalidRequestProblem("Request body is required.", [
                 new DiagramProblemError("request", null, null, "Request body is required.", "required")
@@ -313,19 +379,58 @@ static void AddApiKeySecurityRequirement(OpenApiDocument document, string path)
     });
 }
 
-static bool TryGetSource(string? value, out string source, out IResult error)
+static bool TryGetSource(string? value, RequestLimitOptions limits, out string source, out IResult error)
 {
     source = value ?? string.Empty;
-    if (!string.IsNullOrWhiteSpace(value))
+    if (string.IsNullOrWhiteSpace(value))
     {
-        error = Results.Empty;
-        return true;
+        error = InvalidRequestProblem("Source is required.", [
+            new DiagramProblemError("request", null, null, "Source is required.", "required")
+        ]);
+        return false;
     }
 
-    error = InvalidRequestProblem("Source is required.", [
-        new DiagramProblemError("request", null, null, "Source is required.", "required")
-    ]);
-    return false;
+    if (value.Length > limits.MaxSourceCharacters)
+    {
+        error = InvalidRequestProblem("Source is too large.", [
+            new DiagramProblemError("request", null, null, $"Source must be at most {limits.MaxSourceCharacters} characters.", "source_too_large")
+        ]);
+        return false;
+    }
+
+    if (value.Count(character => character == '\n') + 1 > limits.MaxSourceLines)
+    {
+        error = InvalidRequestProblem("Source contains too many lines.", [
+            new DiagramProblemError("request", null, null, $"Source must contain at most {limits.MaxSourceLines} lines.", "source_too_large")
+        ]);
+        return false;
+    }
+
+    error = Results.Empty;
+    return true;
+}
+
+static bool TryEnforceDiagramLimits(DiagramParseResult result, RequestLimitOptions limits, out IResult error)
+{
+    var elementCount = result.Flowchart?.Nodes.Count
+        ?? result.SequenceDiagram?.Participants.Count
+        ?? result.BpmnDiagram?.Elements.Count
+        ?? 0;
+    var connectionCount = result.Flowchart?.Edges.Count
+        ?? result.SequenceDiagram?.Messages.Count
+        ?? result.BpmnDiagram?.Flows.Count
+        ?? 0;
+
+    if (elementCount > limits.MaxDiagramElements || connectionCount > limits.MaxDiagramConnections)
+    {
+        error = InvalidRequestProblem("Diagram is too complex.", [
+            new DiagramProblemError("request", null, null, "Diagram exceeds configured element or connection limits.", "diagram_too_complex")
+        ]);
+        return false;
+    }
+
+    error = Results.Empty;
+    return true;
 }
 
 static bool IsSupportedRenderFormat(string format)
@@ -365,6 +470,18 @@ static bool ValidateRenderResultOptions(EnzoOptions options)
         && !string.IsNullOrWhiteSpace(renderResults.BlobContainerName);
 }
 
+static bool ValidateRequestLimits(RequestLimitOptions limits)
+{
+    return limits.MaxRequestBodyBytes is >= 1024 and <= 1024 * 1024
+        && limits.MaxSourceCharacters is >= 1024 and <= 256 * 1024
+        && limits.MaxSourceLines is >= 10 and <= 10_000
+        && limits.MaxDiagramElements is >= 10 and <= 5_000
+        && limits.MaxDiagramConnections is >= 10 and <= 10_000
+        && limits.MaxPngWidth is >= 100 and <= 20_000
+        && limits.MaxPngHeight is >= 100 and <= 20_000
+        && limits.MaxPngPixels is >= 10_000 and <= 100_000_000;
+}
+
 static Uri GetRequestBaseUri(HttpRequest request)
 {
     var pathBase = request.PathBase.ToString().Trim('/');
@@ -395,6 +512,32 @@ static IResult InvalidRequestProblem(string detail, IReadOnlyList<DiagramProblem
         {
             ["errors"] = errors
         });
+}
+
+static IResult PayloadTooLargeProblem(int maxRequestBodyBytes)
+{
+    return Results.Problem(
+        title: "Request body is too large.",
+        detail: $"Request body must be at most {maxRequestBodyBytes} bytes.",
+        statusCode: StatusCodes.Status413PayloadTooLarge,
+        extensions: new Dictionary<string, object?>
+        {
+            ["errors"] = new[]
+            {
+                new DiagramProblemError("request", null, null, "Request body exceeds the configured limit.", "request_too_large")
+            }
+        });
+}
+
+static void SetSvgSecurityHeaders(HttpResponse response)
+{
+    SetImageSecurityHeaders(response);
+    response.Headers["Content-Security-Policy"] = "default-src 'none'; img-src 'none'; script-src 'none'; object-src 'none'; style-src 'unsafe-inline'";
+}
+
+static void SetImageSecurityHeaders(HttpResponse response)
+{
+    response.Headers["X-Content-Type-Options"] = "nosniff";
 }
 
 static IResult HostedRenderStorageProblem(string detail)
