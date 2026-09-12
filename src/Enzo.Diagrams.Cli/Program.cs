@@ -1,6 +1,8 @@
-﻿using System.Security;
-using Enzo.Diagrams.Language;
-using Enzo.Diagrams.Rendering;
+using System.Security;
+using Enzo.Diagrams.Application;
+using Enzo.Diagrams.Domain;
+using Enzo.Diagrams.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Enzo.Diagrams.Cli;
 
@@ -48,11 +50,13 @@ public static class CliApplication
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            using var services = CliComposition.CreateServices();
+            var diagrams = services.GetRequiredService<DiagramService>();
 
             return args[0] switch
             {
-                "validate" => await ValidateAsync(args, output, error, cancellationToken),
-                "render" => await RenderAsync(args, output, error, cancellationToken),
+                "validate" => await ValidateAsync(args, diagrams, output, error, cancellationToken),
+                "render" => await RenderAsync(args, diagrams, output, error, cancellationToken),
                 _ => InvalidArguments(error)
             };
         }
@@ -65,6 +69,7 @@ public static class CliApplication
 
     private static async Task<int> ValidateAsync(
         string[] args,
+        DiagramService diagrams,
         TextWriter output,
         TextWriter error,
         CancellationToken cancellationToken)
@@ -74,12 +79,13 @@ public static class CliApplication
             return InvalidArguments(error);
         }
 
-        var result = await ParseFileAsync(args[1], error, cancellationToken);
-        if (result is null)
+        var source = await ReadFileAsync(args[1], error, cancellationToken);
+        if (source is null)
         {
             return FailureExitCode;
         }
 
+        var result = diagrams.Validate(source);
         if (!result.IsSuccess)
         {
             WriteParseErrors(args[1], result, error);
@@ -92,6 +98,7 @@ public static class CliApplication
 
     private static async Task<int> RenderAsync(
         string[] args,
+        DiagramService diagrams,
         TextWriter output,
         TextWriter error,
         CancellationToken cancellationToken)
@@ -101,35 +108,42 @@ public static class CliApplication
             return FailureExitCode;
         }
 
-        var result = await ParseFileAsync(filePath, error, cancellationToken);
-        if (result is null)
+        var source = await ReadFileAsync(filePath, error, cancellationToken);
+        if (source is null)
         {
+            return FailureExitCode;
+        }
+
+        var renderFormat = string.Equals(format, "png", StringComparison.OrdinalIgnoreCase)
+            ? DiagramRenderFormat.Png
+            : DiagramRenderFormat.Svg;
+        DiagramRenderResult result;
+        try
+        {
+            result = diagrams.Render(source, renderFormat);
+        }
+        catch (DiagramPngRenderException exception)
+        {
+            error.WriteLine($"Error: {exception.Message}");
             return FailureExitCode;
         }
 
         if (!result.IsSuccess)
         {
-            WriteParseErrors(filePath, result, error);
+            WriteParseErrors(filePath, result.Validation, error);
             return FailureExitCode;
         }
-
-        var svg = DiagramSvgRenderer.Render(result);
 
         try
         {
             if (string.Equals(format, "png", StringComparison.OrdinalIgnoreCase))
             {
-                await File.WriteAllBytesAsync(outputPath, FlowchartPngRenderer.Render(svg), cancellationToken);
+                await File.WriteAllBytesAsync(outputPath, result.Png!, cancellationToken);
             }
             else
             {
-                await File.WriteAllTextAsync(outputPath, svg, cancellationToken);
+                await File.WriteAllTextAsync(outputPath, result.Svg!, cancellationToken);
             }
-        }
-        catch (FlowchartPngRenderException exception)
-        {
-            error.WriteLine($"Error: {exception.Message}");
-            return FailureExitCode;
         }
         catch (Exception exception) when (IsFileAccessException(exception))
         {
@@ -141,7 +155,7 @@ public static class CliApplication
         return SuccessExitCode;
     }
 
-    private static async Task<DiagramParseResult?> ParseFileAsync(
+    private static async Task<string?> ReadFileAsync(
         string filePath,
         TextWriter error,
         CancellationToken cancellationToken)
@@ -154,8 +168,7 @@ public static class CliApplication
 
         try
         {
-            var source = await File.ReadAllTextAsync(filePath, cancellationToken);
-            return DiagramParser.Parse(source);
+            return await File.ReadAllTextAsync(filePath, cancellationToken);
         }
         catch (Exception exception) when (IsFileAccessException(exception))
         {
@@ -267,17 +280,17 @@ public static class CliApplication
 
     private static void WriteParseErrors(
         string filePath,
-        DiagramParseResult result,
+        DiagramValidationResult result,
         TextWriter error)
     {
         error.WriteLine($"Invalid: {filePath}");
 
-        foreach (var syntaxError in result.Errors)
+        foreach (var syntaxError in result.ParseResult.Errors)
         {
             error.WriteLine($"line {syntaxError.Line}, column {syntaxError.Column}: {syntaxError.Message}");
         }
 
-        foreach (var validationError in result.ValidationErrors)
+        foreach (var validationError in result.ParseResult.ValidationErrors)
         {
             error.WriteLine($"line {validationError.Line}, column {validationError.Column}: {validationError.Message}");
         }
@@ -299,5 +312,16 @@ public static class CliApplication
     private static bool IsFileAccessException(Exception exception)
     {
         return exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or SecurityException;
+    }
+}
+
+internal static class CliComposition
+{
+    public static ServiceProvider CreateServices()
+    {
+        return new ServiceCollection()
+            .AddSingleton<IDiagramRenderer, InfrastructureDiagramRenderer>()
+            .AddSingleton<DiagramService>()
+            .BuildServiceProvider(validateScopes: true);
     }
 }

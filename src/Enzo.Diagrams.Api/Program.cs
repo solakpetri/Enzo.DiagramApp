@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using Azure;
 using Enzo.Diagrams.Api;
-using Enzo.Diagrams.Language;
-using Enzo.Diagrams.Rendering;
+using Enzo.Diagrams.Application;
+using Enzo.Diagrams.Domain;
+using Enzo.Diagrams.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.Options;
@@ -19,12 +19,14 @@ builder.Services.AddOptions<EnzoOptions>()
     .Validate(options => ValidateRequestLimits(options.Limits), "Enzo:Limits is invalid.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IDiagramRenderer, InfrastructureDiagramRenderer>();
+builder.Services.AddScoped<DiagramService>();
 builder.Services.AddSingleton(serviceProvider =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<EnzoOptions>>().Value.RenderResults;
     var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
 
-    return new LocalRenderResultStore(options, timeProvider);
+    return new LocalRenderResultStore(ToRenderResultStorageOptions(options), timeProvider);
 });
 builder.Services.AddSingleton<ILocalRenderResultReader>(serviceProvider =>
     serviceProvider.GetRequiredService<LocalRenderResultStore>());
@@ -34,7 +36,7 @@ builder.Services.AddSingleton<IRenderResultStore>(serviceProvider =>
     var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
 
     return string.Equals(options.Store, "AzureBlob", StringComparison.OrdinalIgnoreCase)
-        ? new AzureBlobRenderResultStore(options, timeProvider)
+        ? new AzureBlobRenderResultStore(ToRenderResultStorageOptions(options), timeProvider)
         : serviceProvider.GetRequiredService<LocalRenderResultStore>();
 });
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -68,6 +70,7 @@ app.MapOpenApi();
 
 app.MapPost("/v1/validate", async (
     HttpRequest httpRequest,
+    DiagramService diagrams,
     IOptions<EnzoOptions> options,
     CancellationToken cancellationToken) =>
 {
@@ -83,11 +86,7 @@ app.MapPost("/v1/validate", async (
         return inputError;
     }
 
-    var result = DiagramParser.Parse(source);
-    if (result.IsSuccess && !TryEnforceDiagramLimits(result, limits, out var limitError))
-    {
-        return limitError;
-    }
+    var result = diagrams.Validate(source, ToDiagramComplexityLimits(limits));
 
     return result.IsSuccess
         ? Results.Ok(new ValidateDiagramResponse(true))
@@ -106,6 +105,7 @@ app.MapPost("/v1/validate", async (
 
 app.MapPost("/v1/render", async (
     HttpRequest httpRequest,
+    DiagramService diagrams,
     IRenderResultStore renderResultStore,
     IOptions<EnzoOptions> options,
     CancellationToken cancellationToken) =>
@@ -151,24 +151,35 @@ app.MapPost("/v1/render", async (
         ]);
     }
 
-    var result = DiagramParser.Parse(source);
+    var format = string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase)
+        ? DiagramRenderFormat.Png
+        : DiagramRenderFormat.Svg;
+    DiagramRenderResult result;
+    try
+    {
+        result = diagrams.Render(
+            source,
+            format,
+            ToDiagramComplexityLimits(limits),
+            new PngRenderOptions(limits.MaxPngWidth, limits.MaxPngHeight, limits.MaxPngPixels));
+    }
+    catch (DiagramPngRenderException)
+    {
+        return InvalidRequestProblem("Diagram could not be rendered as PNG.", [
+            new DiagramProblemError("rendering", null, null, "Diagram could not be rendered as PNG.", "png_render_failed")
+        ]);
+    }
+
     if (!result.IsSuccess)
     {
-        return DiagramProblem(result);
+        return DiagramProblem(result.Validation);
     }
-
-    if (!TryEnforceDiagramLimits(result, limits, out var limitError))
-    {
-        return limitError;
-    }
-
-    var svg = DiagramSvgRenderer.Render(result);
 
     if (string.Equals(request.Format, "png", StringComparison.OrdinalIgnoreCase))
     {
         try
         {
-            var png = FlowchartPngRenderer.Render(svg, limits.MaxPngWidth, limits.MaxPngHeight, limits.MaxPngPixels);
+            var png = result.Png!;
             if (string.Equals(delivery, "url", StringComparison.OrdinalIgnoreCase))
             {
                 var storedResult = await renderResultStore.StoreAsync(
@@ -189,12 +200,6 @@ app.MapPost("/v1/render", async (
             SetImageSecurityHeaders(httpRequest.HttpContext.Response);
             return Results.File(png, "image/png");
         }
-        catch (FlowchartPngRenderException)
-        {
-            return InvalidRequestProblem("Diagram could not be rendered as PNG.", [
-                new DiagramProblemError("rendering", null, null, "Diagram could not be rendered as PNG.", "png_render_failed")
-            ]);
-        }
         catch (RenderResultStoreConfigurationException)
         {
             return HostedRenderStorageProblem("Hosted render storage is not configured correctly.");
@@ -203,14 +208,10 @@ app.MapPost("/v1/render", async (
         {
             return HostedRenderStorageProblem("The rendered diagram could not be stored.");
         }
-        catch (RequestFailedException)
-        {
-            return HostedRenderStorageProblem("The rendered diagram could not be stored.");
-        }
     }
 
     SetSvgSecurityHeaders(httpRequest.HttpContext.Response);
-    return Results.Text(svg, "image/svg+xml", Encoding.UTF8);
+    return Results.Text(result.Svg!, "image/svg+xml", Encoding.UTF8);
 })
 .WithName("RenderDiagram")
 .WithTags("Diagrams")
@@ -412,27 +413,20 @@ static bool TryGetSource(string? value, RequestLimitOptions limits, out string s
     return true;
 }
 
-static bool TryEnforceDiagramLimits(DiagramParseResult result, RequestLimitOptions limits, out IResult error)
+static DiagramComplexityLimits ToDiagramComplexityLimits(RequestLimitOptions limits)
 {
-    var elementCount = result.Flowchart?.Nodes.Count
-        ?? result.SequenceDiagram?.Participants.Count
-        ?? result.BpmnDiagram?.Elements.Count
-        ?? 0;
-    var connectionCount = result.Flowchart?.Edges.Count
-        ?? result.SequenceDiagram?.Messages.Count
-        ?? result.BpmnDiagram?.Flows.Count
-        ?? 0;
+    return new DiagramComplexityLimits(limits.MaxDiagramElements, limits.MaxDiagramConnections);
+}
 
-    if (elementCount > limits.MaxDiagramElements || connectionCount > limits.MaxDiagramConnections)
+static RenderResultStorageOptions ToRenderResultStorageOptions(RenderResultOptions options)
+{
+    return new RenderResultStorageOptions
     {
-        error = InvalidRequestProblem("Diagram is too complex.", [
-            new DiagramProblemError("request", null, null, "Diagram exceeds configured element or connection limits.", "diagram_too_complex")
-        ]);
-        return false;
-    }
-
-    error = Results.Empty;
-    return true;
+        Store = options.Store,
+        BlobConnectionString = options.BlobConnectionString,
+        BlobContainerName = options.BlobContainerName,
+        LocalDirectory = options.LocalDirectory
+    };
 }
 
 static bool IsSupportedRenderFormat(string format)
@@ -492,8 +486,15 @@ static Uri GetRequestBaseUri(HttpRequest request)
     return new Uri($"{request.Scheme}://{request.Host}{basePath}");
 }
 
-static IResult DiagramProblem(DiagramParseResult result)
+static IResult DiagramProblem(DiagramValidationResult result)
 {
+    if (result.LimitViolation is not null)
+    {
+        return InvalidRequestProblem("Diagram is too complex.", [
+            new DiagramProblemError("request", null, null, result.LimitViolation.Message, result.LimitViolation.Code)
+        ]);
+    }
+
     return Results.Problem(
         title: "Diagram DSL is invalid.",
         detail: "The request source contains syntax or validation errors.",
@@ -557,14 +558,14 @@ static IResult HostedRenderStorageProblem(string detail)
         });
 }
 
-static IReadOnlyList<DiagramProblemError> ToDiagramErrors(DiagramParseResult result)
+static IReadOnlyList<DiagramProblemError> ToDiagramErrors(DiagramValidationResult result)
 {
     var errors = new List<DiagramProblemError>();
 
-    errors.AddRange(result.Errors.Select(error =>
+    errors.AddRange(result.ParseResult.Errors.Select(error =>
         new DiagramProblemError("syntax", error.Line, error.Column, error.Message)));
 
-    errors.AddRange(result.ValidationErrors.Select(error =>
+    errors.AddRange(result.ParseResult.ValidationErrors.Select(error =>
         new DiagramProblemError("validation", error.Line, error.Column, error.Message, error.Kind)));
 
     return errors;

@@ -1,8 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj" />
-    <ProjectReference Include="..\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Enzo.Diagrams.Application\Enzo.Diagrams.Application.csproj" />
+    <ProjectReference Include="..\Enzo.Diagrams.Infrastructure\Enzo.Diagrams.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

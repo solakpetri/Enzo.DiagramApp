@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Enzo.Diagrams.Domain\Enzo.Diagrams.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,4 +1,4 @@
-using Enzo.Diagrams.Language;
+using Enzo.Diagrams.Domain;
 
 namespace Enzo.Diagrams.Benchmarks;
 

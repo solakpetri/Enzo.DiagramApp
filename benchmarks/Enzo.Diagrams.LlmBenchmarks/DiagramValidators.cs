@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using Enzo.Diagrams.Language;
-using Enzo.Diagrams.Rendering;
+using Enzo.Diagrams.Domain;
+using Enzo.Diagrams.Infrastructure;
 
 namespace Enzo.Diagrams.LlmBenchmarks;
 

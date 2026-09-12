@@ -9,8 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Enzo.Diagrams.Benchmarks\Enzo.Diagrams.Benchmarks.csproj" />
-    <ProjectReference Include="..\..\src\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj" />
-    <ProjectReference Include="..\..\src\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\Enzo.Diagrams.Infrastructure\Enzo.Diagrams.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
