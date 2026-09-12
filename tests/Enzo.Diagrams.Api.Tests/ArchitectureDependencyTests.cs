@@ -70,7 +70,8 @@ public sealed class ArchitectureDependencyTests
         return document.Descendants("ProjectReference")
             .Select(reference => reference.Attribute("Include")?.Value)
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(projectDirectory, value!))).Replace('\\', '/'))
+            .Select(value => value!.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar))
+            .Select(value => Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(projectDirectory, value))).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToList();
     }
