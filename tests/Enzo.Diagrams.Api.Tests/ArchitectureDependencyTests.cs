@@ -39,6 +39,25 @@ public sealed class ArchitectureDependencyTests
     }
 
     [Fact]
+    public void PackageReferences_KeepDomainAndApplicationFreeOfOuterFrameworks()
+    {
+        var root = FindRepositoryRoot();
+        var disallowedPrefixes = new[]
+        {
+            "Microsoft.AspNetCore.",
+            "System.CommandLine",
+            "Azure.",
+            "SkiaSharp",
+            "Svg.Skia"
+        };
+
+        Assert.Empty(ReadPackageReferences(root, "src/Enzo.Diagrams.Domain/Enzo.Diagrams.Domain.csproj"));
+        Assert.DoesNotContain(
+            ReadPackageReferences(root, "src/Enzo.Diagrams.Application/Enzo.Diagrams.Application.csproj"),
+            package => disallowedPrefixes.Any(prefix => package.StartsWith(prefix, StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void ApiComposition_ResolvesApplicationAndInfrastructureServices()
     {
         using var factory = new WebApplicationFactory<global::Program>()
@@ -72,6 +91,19 @@ public sealed class ArchitectureDependencyTests
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar))
             .Select(value => Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(projectDirectory, value))).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> ReadPackageReferences(string root, string projectPath)
+    {
+        var fullPath = Path.Combine(root, projectPath.Replace('/', Path.DirectorySeparatorChar));
+        var document = XDocument.Load(fullPath);
+
+        return document.Descendants("PackageReference")
+            .Select(reference => reference.Attribute("Include")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
             .Order(StringComparer.Ordinal)
             .ToList();
     }
