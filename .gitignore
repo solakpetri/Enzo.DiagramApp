@@ -1,6 +1,10 @@
 bin/
 obj/
 
+.env
+.env.*
+!.env.example
+
 .vs/
 .vscode/
 .idea/
@@ -16,3 +20,11 @@ coverage/
 
 artifacts/
 *.nupkg
+
+appsettings.Local.json
+appsettings.*.Local.json
+src/**/appsettings.Development.json
+src/**/appsettings.*.Local.json
+
+*.tmp
+*.temp

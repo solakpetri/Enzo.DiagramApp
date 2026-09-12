@@ -42,6 +42,8 @@ internal sealed class EnzoOptions
     public string? ApiKey { get; init; }
 
     public RenderResultOptions RenderResults { get; init; } = new();
+
+    public RequestLimitOptions Limits { get; init; } = new();
 }
 
 internal sealed class RenderResultOptions
@@ -55,4 +57,23 @@ internal sealed class RenderResultOptions
     public string? BlobContainerName { get; init; }
 
     public string LocalDirectory { get; init; } = Path.Combine(Path.GetTempPath(), "enzo-diagrams-render-results");
+}
+
+internal sealed class RequestLimitOptions
+{
+    public int MaxRequestBodyBytes { get; init; } = 64 * 1024;
+
+    public int MaxSourceCharacters { get; init; } = 32 * 1024;
+
+    public int MaxSourceLines { get; init; } = 1_000;
+
+    public int MaxDiagramElements { get; init; } = 500;
+
+    public int MaxDiagramConnections { get; init; } = 1_000;
+
+    public int MaxPngWidth { get; init; } = 8_000;
+
+    public int MaxPngHeight { get; init; } = 8_000;
+
+    public int MaxPngPixels { get; init; } = 16_000_000;
 }

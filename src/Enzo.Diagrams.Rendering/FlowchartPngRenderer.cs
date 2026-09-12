@@ -8,10 +8,18 @@ namespace Enzo.Diagrams.Rendering;
 public static class FlowchartPngRenderer
 {
     private const string BundledFontResourceName = "Enzo.Diagrams.Rendering.Assets.Fonts.DejaVuSans.ttf";
+    private const int DefaultMaxWidth = 8_000;
+    private const int DefaultMaxHeight = 8_000;
+    private const int DefaultMaxPixels = 16_000_000;
 
     private static readonly Lazy<ITypefaceProvider> BundledTypefaceProvider = new(CreateBundledTypefaceProvider);
 
     public static byte[] Render(string svg)
+    {
+        return Render(svg, DefaultMaxWidth, DefaultMaxHeight, DefaultMaxPixels);
+    }
+
+    public static byte[] Render(string svg, int maxWidth, int maxHeight, int maxPixels)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(svg));
         using var skSvg = new SKSvg();
@@ -23,6 +31,14 @@ public static class FlowchartPngRenderer
             if (skSvg.Load(stream) is null || skSvg.Picture is null)
             {
                 throw new FlowchartPngRenderException("SVG could not be rasterized.");
+            }
+
+            var bounds = skSvg.Picture.CullRect;
+            var width = Math.Ceiling(bounds.Width);
+            var height = Math.Ceiling(bounds.Height);
+            if (width <= 0 || height <= 0 || width > maxWidth || height > maxHeight || width * height > maxPixels)
+            {
+                throw new FlowchartPngRenderException("SVG dimensions exceed configured PNG rendering limits.");
             }
 
             using var output = new MemoryStream();

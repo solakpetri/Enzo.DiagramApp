@@ -16,7 +16,7 @@ public sealed class AgentOpenApiContractTests
 
         Assert.Equal("3.1.0", root.GetProperty("openapi").GetString());
         Assert.Equal(
-            "https://enzo-diagrams-api.gentlebeach-2a13ea58.northeurope.azurecontainerapps.io",
+            "http://localhost:5085",
             root.GetProperty("servers")[0].GetProperty("url").GetString());
 
         var paths = root.GetProperty("paths");
@@ -28,6 +28,8 @@ public sealed class AgentOpenApiContractTests
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
         AssertResponseContent(renderPost, "200", "application/json");
+        AssertResponseContent(validatePost, "413", "application/problem+json");
+        AssertResponseContent(renderPost, "413", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
         AssertApiKeySecurityRequirement(renderPost);

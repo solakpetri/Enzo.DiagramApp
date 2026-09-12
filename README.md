@@ -1,6 +1,6 @@
-# Enzo.Diagrams
+# Enzo Diagrams
 
-Enzo.Diagrams is a headless diagram-as-code engine for developers and AI agents. It provides a small DSL for flowcharts, sequence diagrams, and lightweight BPMN, then renders diagrams as SVG or PNG through a CLI or HTTP API.
+Enzo Diagrams is an AI-first diagram-as-code engine with a compact DSL for generating, validating, and rendering sequence diagrams, flowcharts, and lightweight BPMN.
 
 Enzo.Diagrams owns the DSL, parser, validator, layout, and rendering pipeline. AI is optional: the engine does not call an LLM provider, but AI agents can generate Enzo DSL, validate it, render it, and return the generated diagram.
 
@@ -12,9 +12,49 @@ Enzo.Diagrams owns the DSL, parser, validator, layout, and rendering pipeline. A
 - Suitable for AI-generated diagrams without depending on a specific AI provider.
 - SVG and PNG output for documentation, chat, tickets, and build pipelines.
 
+## Current scope
+
+- Custom Enzo DSL for sequence diagrams, flow diagrams, and lightweight BPMN.
+- Parser, validator, layout, SVG renderer, and PNG renderer.
+- CLI and HTTP API interfaces.
+- NuGet CLI package and container/self-hosting support.
+- AI-oriented generation workflows where agents call the HTTP API.
+- Benchmarks that compare Enzo and Mermaid generation trade-offs.
+
+## Quick start
+
+Install the CLI:
+
+```powershell
+dotnet tool install --global Enzo.Diagrams.Cli
+```
+
+Create `login.enzo`:
+
+```text
+sequence Login
+
+actor User "User"
+participant Api "API"
+participant Db "Database"
+
+User -> Api: Login
+Api -> Db: Find user
+Db --> Api: User
+Api --> User: Success
+```
+
+Validate and render it:
+
+```powershell
+enzo-diagram validate .\login.enzo
+enzo-diagram render .\login.enzo
+enzo-diagram render .\login.enzo --format png
+```
+
 ## Benchmarks
 
-Enzo was benchmarked against Mermaid for AI-generated sequence diagrams using 30 scenarios and 5 runs per scenario. Enzo produced more compact source and lower typical token cost, particularly for simple and medium diagrams. Mermaid remained stronger on first-pass syntax reliability and cheaper for complex diagrams due to lower Enzo repair frequency. See the full methodology, results, and limitations in [BENCHMARKS.md](BENCHMARKS.md).
+In the final 30-scenario x 5-run sequence benchmark, Enzo achieved 99.3% eventual equivalent validity and lower median generation cost, while Mermaid retained stronger first-pass generation and lower mean TTVED for complex workloads. See the full methodology, results, and limitations in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Architecture
 
@@ -138,27 +178,29 @@ The API exposes two primary endpoints:
 - `POST /v1/validate`
 - `POST /v1/render`
 
-Hosted validation and rendering requests are protected with the `X-API-Key` header. Store keys in environment variables, secret stores, or the calling platform's secure configuration; do not commit API keys to source control.
+Validation and rendering requests are protected with the `X-API-Key` header. Store keys in environment variables, secret stores, or the calling platform's secure configuration; do not commit API keys to source control.
 
 ```http
 POST /v1/render
-X-API-Key: <api-key>
+X-API-Key: YOUR_ENZO_API_KEY
 Content-Type: application/json
 
 {"source":"flow Demo\nstart Begin \"Begin\"\nend Done \"Done\"\nBegin -> Done","format":"svg"}
 ```
 
-For agent-friendly inline images, request a temporary hosted PNG URL:
+For self-hosted API deployments that need a temporary PNG URL, request hosted URL delivery:
 
 ```http
 POST /v1/render
-X-API-Key: <api-key>
+X-API-Key: YOUR_ENZO_API_KEY
 Content-Type: application/json
 
 {"source":"flow Demo\nstart Begin \"Begin\"\nend Done \"Done\"\nBegin -> Done","format":"png","delivery":"url"}
 ```
 
-The response includes `url`, `contentType`, and `expiresAt`. The URL points to the actual Enzo-rendered PNG and does not require exposing the API key to the browser or user.
+The response includes `url`, `contentType`, and `expiresAt`. The URL points to the actual Enzo-rendered PNG and does not require exposing the API key to the browser or user. External clients, including ChatGPT clients, may decide whether to display that URL inline.
+
+The API enforces configurable request, source, diagram-complexity, and PNG rasterization limits. See [API authentication](docs/api-authentication.md#api-limits) for the default limits and error codes.
 
 See [API authentication](docs/api-authentication.md) and the checked-in [agent OpenAPI contract](docs/openapi/agent.openapi.json).
 
@@ -191,8 +233,8 @@ Agents should:
 2. Use `/v1/validate` for complex diagrams when appropriate.
 3. Correct validation errors if necessary.
 4. Call `/v1/render`.
-5. Use `format: "png"` and `delivery: "url"` when the agent should present an inline image.
-6. Return the generated diagram or the returned hosted PNG URL.
+5. Use `format: "png"` and `delivery: "url"` when the agent should receive a temporary PNG URL from a self-hosted API.
+6. Return the generated diagram or the returned PNG URL without promising inline display in every client.
 
 See [AI integration](docs/ai-integration.md) for agent instructions and ChatGPT Action setup.
 
@@ -253,29 +295,13 @@ Identifiers start with an ASCII letter or `_`, followed by ASCII letters, digits
 - `Enzo.Diagrams.Core` is a shared core project currently present in the solution.
 - `tests/` covers language, rendering, API, and CLI behavior.
 
-## Deployment
+## Hosted deployment
 
-The production API deployment path is:
+Enzo Diagrams was previously deployed and tested on Azure Container Apps using GitHub Actions, GHCR, and Azure OIDC authentication.
 
-```text
-GitHub
-  |
-  v
-GitHub Actions
-  |
-  v
-Docker
-  |
-  v
-GHCR
-  |
-  v
-Azure Container Apps
-```
+The hosted instance has since been stopped. The repository no longer performs automatic Azure deployment.
 
-Merges to `main` run the deployment workflow when API container inputs change. The workflow authenticates to Azure with GitHub OIDC, builds the API Docker image, pushes SHA-tagged images to GHCR, updates the Azure Container App, and keeps validation/rendering endpoints protected by `X-API-Key`.
-
-See [Azure Container deployment](docs/azure-container-deployment.md) for deployment details without secret values.
+Enzo remains self-hostable as a containerized ASP.NET Core API, and the CLI can be used independently.
 
 ## Development
 
@@ -288,15 +314,28 @@ dotnet test
 Run the API locally:
 
 ```powershell
-$env:Enzo__ApiKey = "<local-development-key>"
+$env:Enzo__ApiKey = "YOUR_LOCAL_API_KEY"
 dotnet run --project src/Enzo.Diagrams.Api --urls http://localhost:5085
 ```
+
+For checked-in configuration shape, see `src/Enzo.Diagrams.Api/appsettings.Development.example.json`.
+
+## Removed and retired features
+
+During development, several integration and hosting approaches were explored and later removed from the active product scope:
+
+- **Managed Azure deployment** - Enzo was successfully deployed and tested on Azure Container Apps with GitHub Actions, GHCR, and OIDC. The hosted deployment has since been stopped, and automatic Azure deployment is no longer part of the repository.
+- **MCP server** - an MCP-based integration was prototyped and later removed from the active architecture.
+- **ChatGPT App / Apps SDK UI** - investigated as a richer ChatGPT integration, but not retained. The repository does not ship an Apps SDK application, embedded ChatGPT UI, or interactive frontend.
+- **Guaranteed inline ChatGPT rendering** - Enzo supports rendering PNG/SVG results, and hosted setups may return temporary URLs. Arbitrary ChatGPT clients cannot be assumed to display external PNGs inline.
+- **Interactive web editor** - intentionally out of scope; Enzo remains headless and API/CLI-first.
+- **Broad Mermaid replacement goal** - Enzo is not positioned as a complete Mermaid replacement. Benchmarking showed flow/process generation was harder to make broadly competitive, sequence diagrams showed the strongest Enzo results, and current development emphasizes a compact AI-oriented diagram engine.
 
 ## Additional Documentation
 
 - [API authentication](docs/api-authentication.md)
 - [AI integration](docs/ai-integration.md)
-- [Azure Container deployment](docs/azure-container-deployment.md)
+- [Historical Azure deployment note](docs/azure-container-deployment.md)
 - [Agent OpenAPI contract](docs/openapi/agent.openapi.json)
 
 ## Limitations
