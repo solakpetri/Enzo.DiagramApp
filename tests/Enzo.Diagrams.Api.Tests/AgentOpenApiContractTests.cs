@@ -28,6 +28,8 @@ public sealed class AgentOpenApiContractTests
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
         AssertResponseContent(renderPost, "200", "application/json");
+        AssertResponseContent(validatePost, "413", "application/problem+json");
+        AssertResponseContent(renderPost, "413", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
         AssertApiKeySecurityRequirement(renderPost);

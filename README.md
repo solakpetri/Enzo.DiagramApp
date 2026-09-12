@@ -200,6 +200,8 @@ Content-Type: application/json
 
 The response includes `url`, `contentType`, and `expiresAt`. The URL points to the actual Enzo-rendered PNG and does not require exposing the API key to the browser or user. External clients, including ChatGPT clients, may decide whether to display that URL inline.
 
+The API enforces configurable request, source, diagram-complexity, and PNG rasterization limits. See [API authentication](docs/api-authentication.md#api-limits) for the default limits and error codes.
+
 See [API authentication](docs/api-authentication.md) and the checked-in [agent OpenAPI contract](docs/openapi/agent.openapi.json).
 
 ### AI Agents / ChatGPT

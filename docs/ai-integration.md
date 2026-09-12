@@ -145,7 +145,9 @@ The checked-in agent OpenAPI contract declares API-key authentication with the `
 
 See [API authentication](api-authentication.md) for the `Enzo:ApiKey` configuration key.
 
-Invalid JSON, missing fields, unsupported formats, parser failures, validation failures, and PNG rasterization failures return `application/problem+json` with an `errors` extension that agents can use to repair DSL.
+Invalid JSON, missing fields, unsupported formats, parser failures, validation failures, API limit failures, and PNG rasterization failures return `application/problem+json` with an `errors` extension that agents can use to repair DSL when appropriate.
+
+Agents should treat `request_too_large`, `source_too_large`, `diagram_too_complex`, and `png_render_failed` as signals to reduce diagram size or switch to SVG/raw DSL output rather than retrying the same request unchanged.
 
 Hosted PNG rendering extends `POST /v1/render` without changing existing raw rendering behavior. Omit `delivery` or set it to `raw` for the existing SVG/PNG response body. Set `delivery` to `url` with `format` set to `png` to receive:
 

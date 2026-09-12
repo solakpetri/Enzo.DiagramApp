@@ -101,6 +101,7 @@ app.MapPost("/v1/validate", async (
 .Produces<ValidateDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
 .AddEndpointFilter<ApiKeyEndpointFilter>()
+.ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.MapPost("/v1/render", async (
@@ -268,6 +269,7 @@ app.MapPost("/v1/render", async (
     return Task.CompletedTask;
 })
 .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+.ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
 app.MapGet("/v1/render-results/{id:regex(^[a-f0-9]{{32}}$)}", async (

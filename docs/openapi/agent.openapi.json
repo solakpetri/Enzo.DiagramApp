@@ -62,6 +62,16 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "The request body exceeds the configured API request-size limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -136,6 +146,16 @@
           },
           "401": {
             "description": "A valid API key is required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body exceeds the configured API request-size limit.",
             "content": {
               "application/problem+json": {
                 "schema": {

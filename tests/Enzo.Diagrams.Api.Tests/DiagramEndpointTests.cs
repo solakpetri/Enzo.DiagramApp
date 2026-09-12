@@ -72,10 +72,12 @@ public sealed class DiagramEndpointTests
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
         AssertResponseContent(validatePost, "200", "application/json");
         AssertResponseContent(validatePost, "400", "application/problem+json");
+        AssertResponseContent(validatePost, "413", "application/problem+json");
         AssertResponseContent(renderPost, "200", "image/svg+xml");
         AssertResponseContent(renderPost, "200", "image/png");
         AssertResponseContent(renderPost, "200", "application/json");
         AssertResponseContent(renderPost, "400", "application/problem+json");
+        AssertResponseContent(renderPost, "413", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
         AssertApiKeySecurityRequirement(renderPost);

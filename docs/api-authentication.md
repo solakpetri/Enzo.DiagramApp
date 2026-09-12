@@ -48,6 +48,25 @@ dotnet run --project src/Enzo.Diagrams.Api --urls http://localhost:5085
 
 Production startup fails if `Enzo:ApiKey` is missing or blank.
 
+## API Limits
+
+The API enforces configurable limits before parsing and rendering user input. The checked-in defaults are:
+
+| Setting | Default |
+| --- | ---: |
+| `Enzo:Limits:MaxRequestBodyBytes` | 65,536 |
+| `Enzo:Limits:MaxSourceCharacters` | 32,768 |
+| `Enzo:Limits:MaxSourceLines` | 1,000 |
+| `Enzo:Limits:MaxDiagramElements` | 500 |
+| `Enzo:Limits:MaxDiagramConnections` | 1,000 |
+| `Enzo:Limits:MaxPngWidth` | 8,000 |
+| `Enzo:Limits:MaxPngHeight` | 8,000 |
+| `Enzo:Limits:MaxPngPixels` | 16,000,000 |
+
+Oversized request bodies return `413 Payload Too Large` with error code `request_too_large`. Oversized source text returns `400 Bad Request` with `source_too_large`. Parsed diagrams over the configured element or connection limits return `400 Bad Request` with `diagram_too_complex`. PNG output that exceeds configured rasterization limits returns `400 Bad Request` with `png_render_failed`.
+
+Tune these values for the hosting environment and expected diagram sizes.
+
 ## Self-hosting
 
 For self-hosted deployments, configure `Enzo:ApiKey` through the hosting platform's secret or environment-variable mechanism. Do not place the raw key in source-controlled configuration.
