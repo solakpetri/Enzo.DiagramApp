@@ -54,7 +54,7 @@ Scenarios that fail structural equivalence are rejected. This prevents silently 
 
 ## Validation
 
-Enzo fixtures are parsed and validated with the real `Enzo.Diagrams.Language` parser/validator. The runner also renders each valid Enzo fixture through `Enzo.Diagrams.Rendering` to verify it is usable by the renderer.
+Enzo fixtures are parsed and validated with the real `Enzo.Diagrams.Domain` parser/validator. The runner also renders each valid Enzo fixture through `Enzo.Diagrams.Infrastructure` to verify it is usable by the renderer.
 
 Mermaid fixtures are validated by a deterministic subset parser for the Mermaid syntax used in the fixtures: `flowchart TD` nodes/edges for flow and process scenarios, and `sequenceDiagram` participants/messages for sequence scenarios. Unsupported or inconsistent Mermaid lines fail the benchmark.
 
@@ -156,7 +156,7 @@ The model is configurable with `--model`, `ENZO_LLM_BENCHMARK_MODEL`, or `OPENAI
 
 ### Validation
 
-Enzo output is validated with the real `Enzo.Diagrams.Language` parser and rendered through `Enzo.Diagrams.Rendering`.
+Enzo output is validated with the real `Enzo.Diagrams.Domain` parser and rendered through `Enzo.Diagrams.Infrastructure`.
 
 Mermaid output is validated by rendering with Mermaid CLI. Install Node.js and Mermaid CLI before running Mermaid benchmarks:
 
