@@ -5,11 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Core", "src\Enzo.Diagrams.Core\Enzo.Diagrams.Core.csproj", "{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Domain", "src\Enzo.Diagrams.Domain\Enzo.Diagrams.Domain.csproj", "{EB00193D-7791-401A-9E81-3304B6A5BD2A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Language", "src\Enzo.Diagrams.Language\Enzo.Diagrams.Language.csproj", "{EB00193D-7791-401A-9E81-3304B6A5BD2A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Rendering", "src\Enzo.Diagrams.Rendering\Enzo.Diagrams.Rendering.csproj", "{18178773-B2FA-419C-838D-4610169994B1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Infrastructure", "src\Enzo.Diagrams.Infrastructure\Enzo.Diagrams.Infrastructure.csproj", "{18178773-B2FA-419C-838D-4610169994B1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Cli", "src\Enzo.Diagrams.Cli\Enzo.Diagrams.Cli.csproj", "{0FACB23D-2D83-4EF0-9739-7CC0A22FA137}"
 EndProject
@@ -17,9 +15,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Api", "src\En
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Language.Tests", "tests\Enzo.Diagrams.Language.Tests\Enzo.Diagrams.Language.Tests.csproj", "{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Domain.Tests", "tests\Enzo.Diagrams.Domain.Tests\Enzo.Diagrams.Domain.Tests.csproj", "{57BAA84E-2DB8-404E-9CF7-1C5395F3DDCF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Rendering.Tests", "tests\Enzo.Diagrams.Rendering.Tests\Enzo.Diagrams.Rendering.Tests.csproj", "{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Infrastructure.Tests", "tests\Enzo.Diagrams.Infrastructure.Tests\Enzo.Diagrams.Infrastructure.Tests.csproj", "{BD2BB9C0-A7CB-471F-9F54-50A1F74BB9A0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Cli.Tests", "tests\Enzo.Diagrams.Cli.Tests\Enzo.Diagrams.Cli.Tests.csproj", "{F6CD56A1-5D1E-4FF7-B0FC-B49C09EFBEAA}"
 EndProject
@@ -33,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Benchmarks.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.LlmBenchmarks", "benchmarks\Enzo.Diagrams.LlmBenchmarks\Enzo.Diagrams.LlmBenchmarks.csproj", "{65183432-176C-433D-B59A-32AA98C82D8A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Application", "src\Enzo.Diagrams.Application\Enzo.Diagrams.Application.csproj", "{2A173AC1-3306-4923-91E4-B092255F82EE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,18 +43,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|x64.Build.0 = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Debug|x86.Build.0 = Debug|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|x64.ActiveCfg = Release|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|x64.Build.0 = Release|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|x86.ActiveCfg = Release|Any CPU
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F}.Release|x86.Build.0 = Release|Any CPU
 		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EB00193D-7791-401A-9E81-3304B6A5BD2A}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -187,12 +175,23 @@ Global
 		{65183432-176C-433D-B59A-32AA98C82D8A}.Release|x64.Build.0 = Release|Any CPU
 		{65183432-176C-433D-B59A-32AA98C82D8A}.Release|x86.ActiveCfg = Release|Any CPU
 		{65183432-176C-433D-B59A-32AA98C82D8A}.Release|x86.Build.0 = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|x64.Build.0 = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Debug|x86.Build.0 = Debug|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x64.ActiveCfg = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x64.Build.0 = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x86.ActiveCfg = Release|Any CPU
+		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{0B2168D0-2B0D-441A-8ED9-50BF8829D83F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EB00193D-7791-401A-9E81-3304B6A5BD2A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{18178773-B2FA-419C-838D-4610169994B1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{0FACB23D-2D83-4EF0-9739-7CC0A22FA137} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
@@ -204,5 +203,6 @@ Global
 		{185E5842-9D86-4E62-B3B5-7B7E83AE581E} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 		{7F457133-ED29-49F9-AA73-3F36F0EDA0FE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{65183432-176C-433D-B59A-32AA98C82D8A} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
+		{2A173AC1-3306-4923-91E4-B092255F82EE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -1,5 +1,5 @@
 using Enzo.Diagrams.Benchmarks;
-using Enzo.Diagrams.Language;
+using Enzo.Diagrams.Domain;
 
 namespace Enzo.Diagrams.LlmBenchmarks;
 
