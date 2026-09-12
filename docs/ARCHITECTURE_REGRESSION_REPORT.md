@@ -126,7 +126,7 @@ dotnet pack src\Enzo.Diagrams.Cli\Enzo.Diagrams.Cli.csproj -c Release
 Results:
 
 - Build: pass, 0 warnings, 0 errors.
-- Tests: pass, 194 tests.
+- Tests: pass, 202 tests.
 - Pack: pass, package `Enzo.Diagrams.Cli.0.1.0.nupkg` created. NuGet emitted the existing warning that the package has no readme.
 
 Docker command attempted:

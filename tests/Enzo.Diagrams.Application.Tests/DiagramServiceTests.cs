@@ -89,6 +89,53 @@ public sealed class DiagramServiceTests
         Assert.Equal("diagram_too_complex", result.LimitViolation.Code);
     }
 
+    [Fact]
+    public void Validate_WhenDiagramIsExactlyAtComplexityLimits_ReturnsSuccess()
+    {
+        var service = new DiagramService(new FakeRenderer());
+
+        var result = service.Validate(ValidSequenceSource, new DiagramComplexityLimits(MaxDiagramElements: 4, MaxDiagramConnections: 4));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.LimitViolation);
+    }
+
+    [Fact]
+    public void Validate_WhenConnectionsExceedLimit_ReturnsLimitViolation()
+    {
+        var service = new DiagramService(new FakeRenderer());
+
+        var result = service.Validate(ValidSequenceSource, new DiagramComplexityLimits(MaxDiagramElements: 10, MaxDiagramConnections: 3));
+
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.LimitViolation);
+        Assert.Equal("diagram_too_complex", result.LimitViolation.Code);
+    }
+
+    [Fact]
+    public void Render_WhenPngRendererFails_PropagatesRendererException()
+    {
+        var service = new DiagramService(new ThrowingPngRenderer());
+
+        var exception = Assert.Throws<DiagramPngRenderException>(() => service.Render(ValidSequenceSource, DiagramRenderFormat.Png));
+
+        Assert.Equal("PNG failed.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Validate_WhenUsedConcurrently_ReturnsIndependentResults()
+    {
+        var service = new DiagramService(new FakeRenderer());
+
+        var tasks = Enumerable.Range(0, 20)
+            .Select(_ => Task.Run(() => service.Validate(ValidSequenceSource)))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+    }
+
     private const string ValidSequenceSource = """
         sequence Checkout
         actor Customer "Customer"
@@ -123,6 +170,19 @@ public sealed class DiagramServiceTests
             LastPngInput = svg;
             LastPngOptions = options;
             return Png;
+        }
+    }
+
+    private sealed class ThrowingPngRenderer : IDiagramRenderer
+    {
+        public string RenderSvg(DiagramParseResult result)
+        {
+            return FakeRenderer.Svg;
+        }
+
+        public byte[] RenderPng(string svg, PngRenderOptions? options = null)
+        {
+            throw new DiagramPngRenderException("PNG failed.");
         }
     }
 }
