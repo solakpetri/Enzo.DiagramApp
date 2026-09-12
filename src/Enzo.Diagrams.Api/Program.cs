@@ -19,8 +19,8 @@ builder.Services.AddOptions<EnzoOptions>()
     .Validate(options => ValidateRequestLimits(options.Limits), "Enzo:Limits is invalid.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IDiagramRenderer, InfrastructureDiagramRenderer>();
-builder.Services.AddSingleton<DiagramService>();
+builder.Services.AddScoped<IDiagramRenderer, InfrastructureDiagramRenderer>();
+builder.Services.AddScoped<DiagramService>();
 builder.Services.AddSingleton(serviceProvider =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<EnzoOptions>>().Value.RenderResults;

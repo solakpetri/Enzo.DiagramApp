@@ -100,16 +100,16 @@ public sealed class AzureBlobRenderResultStore(RenderResultStorageOptions option
         Uri requestBaseUri,
         CancellationToken cancellationToken)
     {
-        var id = RenderResultIds.Create();
-        var blobName = $"{BlobPrefix}/{id}.png";
-        var blobClient = containerClient.GetBlobClient(blobName);
-        if (!blobClient.CanGenerateSasUri)
-        {
-            throw new RenderResultStoreConfigurationException("Hosted render storage is not configured for read-only URL generation.");
-        }
-
         try
         {
+            var id = RenderResultIds.Create();
+            var blobName = $"{BlobPrefix}/{id}.png";
+            var blobClient = containerClient.GetBlobClient(blobName);
+            if (!blobClient.CanGenerateSasUri)
+            {
+                throw new RenderResultStoreConfigurationException("Hosted render storage is not configured for read-only URL generation.");
+            }
+
             await containerClient.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: cancellationToken);
             await using var stream = new MemoryStream(bytes, writable: false);
             await blobClient.UploadAsync(stream, new BlobUploadOptions
@@ -119,21 +119,21 @@ public sealed class AzureBlobRenderResultStore(RenderResultStorageOptions option
                     ContentType = contentType
                 }
             }, cancellationToken);
+
+            var expiresAt = timeProvider.GetUtcNow().Add(lifetime);
+            var sasBuilder = new BlobSasBuilder(BlobSasPermissions.Read, expiresAt)
+            {
+                BlobContainerName = options.BlobContainerName,
+                BlobName = blobName,
+                Resource = "b"
+            };
+
+            return new StoredRenderResult(id, blobClient.GenerateSasUri(sasBuilder).ToString(), expiresAt);
         }
         catch (RequestFailedException exception)
         {
             throw new RenderResultStoreException("The rendered diagram could not be stored.", exception);
         }
-
-        var expiresAt = timeProvider.GetUtcNow().Add(lifetime);
-        var sasBuilder = new BlobSasBuilder(BlobSasPermissions.Read, expiresAt)
-        {
-            BlobContainerName = options.BlobContainerName,
-            BlobName = blobName,
-            Resource = "b"
-        };
-
-        return new StoredRenderResult(id, blobClient.GenerateSasUri(sasBuilder).ToString(), expiresAt);
     }
 
 }
