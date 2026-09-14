@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.LlmBenchmarks
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Application", "src\Enzo.Diagrams.Application\Enzo.Diagrams.Application.csproj", "{2A173AC1-3306-4923-91E4-B092255F82EE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Enzo.Diagrams.Application.Tests", "tests\Enzo.Diagrams.Application.Tests\Enzo.Diagrams.Application.Tests.csproj", "{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -187,6 +189,18 @@ Global
 		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x64.Build.0 = Release|Any CPU
 		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x86.ActiveCfg = Release|Any CPU
 		{2A173AC1-3306-4923-91E4-B092255F82EE}.Release|x86.Build.0 = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|x64.Build.0 = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Debug|x86.Build.0 = Debug|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|x64.ActiveCfg = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|x64.Build.0 = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|x86.ActiveCfg = Release|Any CPU
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -204,5 +218,6 @@ Global
 		{7F457133-ED29-49F9-AA73-3F36F0EDA0FE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{65183432-176C-433D-B59A-32AA98C82D8A} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 		{2A173AC1-3306-4923-91E4-B092255F82EE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{BEBDB54E-39DB-4B8B-8361-79FE62DDA92E} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

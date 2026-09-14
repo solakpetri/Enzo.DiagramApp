@@ -1,4 +1,6 @@
 using Enzo.Diagrams.Cli;
+using Enzo.Diagrams.Application;
+using Enzo.Diagrams.Infrastructure;
 using Xunit;
 
 namespace Enzo.Diagrams.Cli.Tests;
@@ -155,6 +157,43 @@ public sealed class CliApplicationTests
         Assert.True(File.Exists(outputPath));
         Assert.Contains("Stock available?", await File.ReadAllTextAsync(outputPath));
         Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Render_CliAndApplication_ReturnEquivalentSvg()
+    {
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("checkout.enzo", ValidSequenceSource);
+        var outputPath = Path.Combine(workspace.Path, "checkout.svg");
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var application = new DiagramService(new InfrastructureDiagramRenderer());
+
+        var exitCode = await CliApplication.RunAsync(["render", filePath], output, error);
+        var applicationResult = application.Render(ValidSequenceSource, DiagramRenderFormat.Svg);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(applicationResult.IsSuccess);
+        Assert.Equal(applicationResult.Svg, await File.ReadAllTextAsync(outputPath));
+    }
+
+    [Fact]
+    public async Task Validate_CliAndApplication_ReturnEquivalentInvalidOutcome()
+    {
+        const string invalidSource = "sequence Checkout\nactor Customer\nCustomer -> Api: Checkout";
+        using var workspace = TestWorkspace.Create();
+        var filePath = workspace.WriteFile("checkout.enzo", invalidSource);
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var application = new DiagramService(new InfrastructureDiagramRenderer());
+
+        var exitCode = await CliApplication.RunAsync(["validate", filePath], output, error);
+        var applicationResult = application.Validate(invalidSource);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.False(applicationResult.IsSuccess);
+        Assert.Contains("Unknown participant 'Api'", error.ToString());
+        Assert.Contains(applicationResult.ParseResult.ValidationErrors, validationError => validationError.Kind == "UnknownMessageTarget");
     }
 
     [Fact]

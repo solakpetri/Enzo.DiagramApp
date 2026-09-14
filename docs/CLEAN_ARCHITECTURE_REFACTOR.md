@@ -1,12 +1,20 @@
 # Clean Architecture Refactor
 
+This document records the completed refactor from the earlier project layout to the current Clean Architecture layout. For ongoing architecture guidance, see [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 ## Previous Structure
 
-The solution previously used `Enzo.Diagrams.Language` for DSL models, parser, validators, and layout; `Enzo.Diagrams.Rendering` for SVG/PNG output; `Enzo.Diagrams.Api` for endpoints plus hosted storage; `Enzo.Diagrams.Cli` for command-line orchestration; and an empty `Enzo.Diagrams.Core` project.
+The solution previously used:
 
-API and CLI both directly parsed and rendered diagrams, so use-case orchestration was duplicated at the outer layers. Hosted render storage lived in the API project and brought Azure-specific implementation concerns into the HTTP layer.
+- `Enzo.Diagrams.Language` for DSL models, parsing, validation, and layout.
+- `Enzo.Diagrams.Rendering` for SVG and PNG output.
+- `Enzo.Diagrams.Api` for endpoints plus hosted render storage concerns.
+- `Enzo.Diagrams.Cli` for command-line orchestration.
+- an empty `Enzo.Diagrams.Core` project.
 
-## New Structure
+API and CLI directly parsed and rendered diagrams, so use-case orchestration was duplicated at the outer layers. Hosted render storage also lived at the API boundary.
+
+## Current Structure
 
 ```text
 src/
@@ -17,23 +25,25 @@ src/
   Enzo.Diagrams.Cli/
 ```
 
-The old empty Core project was removed. Language became Domain. Rendering became Infrastructure. Application was introduced as the shared use-case layer.
+The old Core project was removed. Language responsibilities moved to Domain. Rendering responsibilities moved to Infrastructure. Application was introduced as the shared use-case layer used by both API and CLI.
 
-## Major Components Moved
+## Components Moved
 
-| Component | New Location |
+| Component | Current Location |
 | --- | --- |
-| Diagram models, parser, lexer, syntax errors | `Enzo.Diagrams.Domain` |
+| Diagram models, lexer, parsers, syntax errors | `Enzo.Diagrams.Domain` |
 | Flowchart, sequence, and BPMN validators | `Enzo.Diagrams.Domain` |
 | Flowchart, sequence, and BPMN layout engines | `Enzo.Diagrams.Domain` |
 | Validation/render orchestration | `Enzo.Diagrams.Application.DiagramService` |
-| Renderer contracts and render result storage contracts | `Enzo.Diagrams.Application` |
+| Renderer and render-result storage contracts | `Enzo.Diagrams.Application` |
 | SVG and PNG renderer implementations | `Enzo.Diagrams.Infrastructure` |
-| Local and Azure hosted render storage | `Enzo.Diagrams.Infrastructure` |
+| Local and optional Azure render-result storage | `Enzo.Diagrams.Infrastructure` |
+| HTTP request contracts, authentication, limits, hosted URL mapping | `Enzo.Diagrams.Api` |
+| CLI command parsing, file behavior, stdout/stderr, exit codes | `Enzo.Diagrams.Cli` |
 
 ## Dependency Direction
 
-Project references now follow the intended direction:
+Implemented project references are:
 
 ```text
 Domain -> no Enzo project dependencies
@@ -43,50 +53,37 @@ API -> Application, Infrastructure
 CLI -> Application, Infrastructure
 ```
 
-Benchmarks continue to compile against the refactored projects without changing scenarios, prompts, metrics, semantic scoring, or historical results.
+Lightweight architecture tests enforce this direction and verify that Domain/Application do not acquire outer framework packages such as ASP.NET Core, Azure, System.CommandLine, SkiaSharp, or Svg.Skia.
 
-## Architectural Decisions
+## Behavior Preserved
 
-Parser remains inward in Domain because it defines the Enzo DSL semantics.
+The refactor was intended to preserve:
 
-Validator remains inward in Domain because the current checks are core diagram invariants.
+- DSL syntax
+- parser behavior
+- validator behavior
+- layout behavior
+- SVG rendering behavior
+- PNG rendering behavior
+- API request and response contracts
+- API-key authentication through `X-API-Key`
+- CLI commands, options, output behavior, and exit codes
+- hosted render behavior for self-hosted deployments
+- benchmark scenario and metric semantics
+- NuGet CLI package identity `Enzo.Diagrams.Cli`
 
-Layout remains inward in Domain because it is deterministic and renderer-independent.
+The architecture regression branch adds characterization tests and documentation updates for these areas.
 
-Rendering moved outward to Infrastructure because SVG/PNG output is an implementation concern and PNG uses external rasterization libraries.
+## Current Compromises
 
-Hosted render storage now uses Application contracts with Infrastructure implementations. API still controls HTTP response mapping, URL delivery validation, and hosted-result endpoint behavior.
+- Parser, validation, and layout remain in Domain because they define deterministic Enzo DSL behavior.
+- Rendering is in Infrastructure because SVG/PNG output and PNG rasterization are implementation concerns.
+- Application owns render-result storage contracts so hosted rendering can be orchestrated without coupling use cases to local files or Azure SDKs.
+- API request body/source limits remain at the HTTP boundary, while parsed diagram complexity limits are reusable through Application.
+- API and CLI are separate composition roots instead of sharing transport-specific code.
 
-## Compromises
+## Azure Status
 
-Public renderer static classes remain available in Infrastructure to keep tests and benchmark callers simple during this structural migration.
+Enzo Diagrams was previously deployed and tested successfully on Azure Container Apps. The hosted environment was later stopped, and the repository no longer automatically deploys to Azure.
 
-API request body/source limits remain in the API layer because they are HTTP boundary concerns. Diagram element/connection complexity is enforced through Application orchestration so API and future callers can reuse the same rule.
-
-No architecture-testing package was introduced. Lightweight tests inspect project references and composition resolution.
-
-## Behavior Intentionally Preserved
-
-DSL syntax, parser behavior, validator behavior, layout behavior, SVG rendering, PNG rendering, API routes/contracts, API-key behavior, CLI commands/options/output, hosted-render behavior, benchmark semantics, benchmark scenarios, and CLI NuGet package identity were intentionally preserved.
-
-## Areas Deliberately Not Changed
-
-No new diagram features were added. Benchmark optimization was not continued. Azure-specific storage was not expanded. API versioning, CLI UX, documentation rewrite, and comprehensive characterization coverage are left for the follow-up branch.
-
-## Tests Run
-
-```text
-dotnet restore Enzo.Diagrams.sln
-dotnet build Enzo.Diagrams.sln --no-restore
-dotnet test Enzo.Diagrams.sln --no-build
-```
-
-## Follow-Up Recommendations
-
-The next planned branch is:
-
-```text
-test/architecture-regression
-```
-
-That branch will comprehensively regression-test behavior, add missing characterization tests, test API contracts, test CLI behavior, test parser/validator/render output, test security-sensitive behavior, and update or rewrite documentation to reflect the final architecture.
+Azure Blob storage remains an optional Infrastructure implementation for self-hosted hosted-render deployments. It is not an active repository deployment target.
