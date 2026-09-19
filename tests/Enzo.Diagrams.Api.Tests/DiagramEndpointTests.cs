@@ -64,15 +64,21 @@ public sealed class DiagramEndpointTests
         var root = json.RootElement;
         var paths = root.GetProperty("paths");
         var validatePost = paths.GetProperty("/v1/validate").GetProperty("post");
+        var batchValidatePost = paths.GetProperty("/v1/validate/batch").GetProperty("post");
         var renderPost = paths.GetProperty("/v1/render").GetProperty("post");
 
         Assert.Equal("Validate Enzo.Diagrams DSL.", validatePost.GetProperty("summary").GetString());
+        Assert.Equal("Validate multiple Enzo.Diagrams DSL documents.", batchValidatePost.GetProperty("summary").GetString());
         Assert.Equal("Render Enzo.Diagrams DSL.", renderPost.GetProperty("summary").GetString());
         Assert.Contains("source DSL", renderPost.GetProperty("description").GetString());
         Assert.Contains("svg and png", renderPost.GetProperty("description").GetString());
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
+        AssertRequestSchema(batchValidatePost, "BatchValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
         AssertResponseContent(validatePost, "200", "application/json");
+        AssertResponseContent(batchValidatePost, "200", "application/json");
+        AssertResponseContent(batchValidatePost, "400", "application/problem+json");
+        AssertResponseContent(batchValidatePost, "413", "application/problem+json");
         AssertResponseContent(validatePost, "400", "application/problem+json");
         AssertResponseContent(validatePost, "413", "application/problem+json");
         AssertResponseContent(renderPost, "200", "image/svg+xml");
@@ -82,6 +88,7 @@ public sealed class DiagramEndpointTests
         AssertResponseContent(renderPost, "413", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
+        AssertApiKeySecurityRequirement(batchValidatePost);
         AssertApiKeySecurityRequirement(renderPost);
 
         var renderRequestSchema = root.GetProperty("components").GetProperty("schemas").GetProperty("RenderDiagramRequest");
@@ -175,6 +182,54 @@ public sealed class DiagramEndpointTests
         Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
             error.GetProperty("type").GetString() == "syntax"
             && error.GetProperty("line").GetInt32() == 2);
+    }
+
+    [Fact]
+    public async Task BatchValidate_MixedSources_ReturnsPerItemResults()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/validate/batch", new
+        {
+            items = new[]
+            {
+                new { id = "good-flow", source = ValidSource },
+                new { id = "bad-sequence", source = "sequence Checkout\nactor Customer\nCustomer -> API: Checkout" }
+            }
+        });
+
+        response.EnsureSuccessStatusCode();
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        var root = json.RootElement;
+        var items = root.GetProperty("items").EnumerateArray().ToArray();
+
+        Assert.Equal(2, root.GetProperty("total").GetInt32());
+        Assert.Equal(1, root.GetProperty("valid").GetInt32());
+        Assert.Equal("good-flow", items[0].GetProperty("id").GetString());
+        Assert.True(items[0].GetProperty("valid").GetBoolean());
+        Assert.Empty(items[0].GetProperty("errors").EnumerateArray());
+        Assert.Equal("bad-sequence", items[1].GetProperty("id").GetString());
+        Assert.False(items[1].GetProperty("valid").GetBoolean());
+        Assert.Contains(items[1].GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "UnknownMessageTarget");
+    }
+
+    [Fact]
+    public async Task BatchValidate_TooManyItems_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+        var items = Enumerable.Range(0, 51).Select(index => new { id = index.ToString(), source = ValidSource }).ToArray();
+
+        var response = await client.PostAsJsonAsync("/v1/validate/batch", new { items });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "batch_too_large");
     }
 
     [Fact]

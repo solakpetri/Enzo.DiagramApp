@@ -103,6 +103,46 @@ app.MapPost("/v1/validate", async (
 .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
 
+app.MapPost("/v1/validate/batch", async (
+    HttpRequest httpRequest,
+    DiagramService diagrams,
+    IOptions<EnzoOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    var limits = options.Value.Limits;
+    var (request, readError) = await ReadRequestAsync<BatchValidateDiagramRequest>(httpRequest, limits, cancellationToken);
+    if (readError is not null)
+    {
+        return readError;
+    }
+
+    if (!TryGetBatchValidationItems(request!, limits, out var items, out var inputError))
+    {
+        return inputError;
+    }
+
+    var results = diagrams.ValidateBatch(items, ToDiagramComplexityLimits(limits));
+    var responseItems = results.Select(result => new BatchValidateDiagramItemResponse(
+        result.Id,
+        result.Validation.IsSuccess,
+        result.Validation.IsSuccess ? [] : ToDiagramErrors(result.Validation))).ToArray();
+
+    return Results.Ok(new BatchValidateDiagramResponse(
+        responseItems.Length,
+        responseItems.Count(item => item.Valid),
+        responseItems));
+})
+.WithName("BatchValidateDiagrams")
+.WithTags("Diagrams")
+.WithSummary("Validate multiple Enzo.Diagrams DSL documents.")
+.WithDescription("Parses and validates up to 50 source DSL documents in one request. Request shape errors return ProblemDetails. Per-diagram syntax, validation, and complexity errors are returned in the item results.")
+.Accepts<BatchValidateDiagramRequest>("application/json")
+.Produces<BatchValidateDiagramResponse>()
+.ProducesProblem(StatusCodes.Status401Unauthorized)
+.AddEndpointFilter<ApiKeyEndpointFilter>()
+.ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+.ProducesProblem(StatusCodes.Status400BadRequest);
+
 app.MapPost("/v1/render", async (
     HttpRequest httpRequest,
     DiagramService diagrams,
@@ -360,6 +400,7 @@ static Task AddApiKeySecurityScheme(OpenApiDocument document, OpenApiDocumentTra
         Name = ApiKeyEndpointFilter.HeaderName
     };
     AddApiKeySecurityRequirement(document, "/v1/validate");
+    AddApiKeySecurityRequirement(document, "/v1/validate/batch");
     AddApiKeySecurityRequirement(document, "/v1/render");
 
     return Task.CompletedTask;
@@ -416,6 +457,49 @@ static bool TryGetSource(string? value, RequestLimitOptions limits, out string s
 static DiagramComplexityLimits ToDiagramComplexityLimits(RequestLimitOptions limits)
 {
     return new DiagramComplexityLimits(limits.MaxDiagramElements, limits.MaxDiagramConnections);
+}
+
+static bool TryGetBatchValidationItems(
+    BatchValidateDiagramRequest request,
+    RequestLimitOptions limits,
+    out IReadOnlyList<DiagramBatchValidationRequest> items,
+    out IResult error)
+{
+    const int maxBatchValidationItems = 50;
+    items = [];
+    if (request.Items is null || request.Items.Count == 0)
+    {
+        error = InvalidRequestProblem("At least one batch item is required.", [
+            new DiagramProblemError("request", null, null, "Items must contain at least one diagram.", "required")
+        ]);
+        return false;
+    }
+
+    if (request.Items.Count > maxBatchValidationItems)
+    {
+        error = InvalidRequestProblem("Too many batch items.", [
+            new DiagramProblemError("request", null, null, $"Items must contain at most {maxBatchValidationItems} diagrams.", "batch_too_large")
+        ]);
+        return false;
+    }
+
+    var validationItems = new List<DiagramBatchValidationRequest>(request.Items.Count);
+    for (var index = 0; index < request.Items.Count; index++)
+    {
+        var item = request.Items[index];
+        if (!TryGetSource(item.Source, limits, out var source, out error))
+        {
+            return false;
+        }
+
+        validationItems.Add(new DiagramBatchValidationRequest(
+            string.IsNullOrWhiteSpace(item.Id) ? index.ToString() : item.Id.Trim(),
+            source));
+    }
+
+    items = validationItems;
+    error = Results.Empty;
+    return true;
 }
 
 static RenderResultStorageOptions ToRenderResultStorageOptions(RenderResultOptions options)
@@ -560,6 +644,11 @@ static IResult HostedRenderStorageProblem(string detail)
 
 static IReadOnlyList<DiagramProblemError> ToDiagramErrors(DiagramValidationResult result)
 {
+    if (result.LimitViolation is not null)
+    {
+        return [new DiagramProblemError("request", null, null, result.LimitViolation.Message, result.LimitViolation.Code)];
+    }
+
     var errors = new List<DiagramProblemError>();
 
     errors.AddRange(result.ParseResult.Errors.Select(error =>
