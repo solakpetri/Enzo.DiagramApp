@@ -17,6 +17,7 @@
     <Version>0.1.0</Version>
     <Authors>solakpetri</Authors>
     <Description>Command-line tool for validating and rendering Enzo.Diagrams DSL files.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>diagram;diagrams;dsl;cli;svg;png</PackageTags>
     <RepositoryUrl>https://github.com/solakpetri/Enzo.DiagramApp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
