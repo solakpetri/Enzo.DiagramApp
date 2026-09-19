@@ -13,8 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddOptions<EnzoOptions>()
     .Bind(builder.Configuration.GetSection(EnzoOptions.SectionName))
-    .Validate(options => !builder.Environment.IsProduction() || !string.IsNullOrWhiteSpace(options.ApiKey),
-        "Enzo:ApiKey must be configured in production.")
+    .Validate(options => !builder.Environment.IsProduction() || options.ApiKeys.Count > 0,
+        "Enzo:ApiKeys must contain at least one key in production.")
+    .Validate(ValidateApiKeyOptions, "Enzo:ApiKeys is invalid.")
     .Validate(ValidateRenderResultOptions, "Enzo:RenderResults is invalid.")
     .Validate(options => ValidateRequestLimits(options.Limits), "Enzo:Limits is invalid.")
     .ValidateOnStart();
@@ -99,6 +100,7 @@ app.MapPost("/v1/validate", async (
 .Accepts<ValidateDiagramRequest>("application/json")
 .Produces<ValidateDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Validate))
 .AddEndpointFilter<ApiKeyEndpointFilter>()
 .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -139,6 +141,7 @@ app.MapPost("/v1/validate/batch", async (
 .Accepts<BatchValidateDiagramRequest>("application/json")
 .Produces<BatchValidateDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Validate))
 .AddEndpointFilter<ApiKeyEndpointFilter>()
 .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -261,6 +264,7 @@ app.MapPost("/v1/render", async (
 .Produces(StatusCodes.Status200OK)
 .Produces<HostedRenderDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Render))
 .AddEndpointFilter<ApiKeyEndpointFilter>()
 .AddOpenApiOperationTransformer((operation, _, _) =>
 {
@@ -548,6 +552,52 @@ static bool ValidateRenderResultOptions(EnzoOptions options)
     return string.Equals(renderResults.Store, "AzureBlob", StringComparison.OrdinalIgnoreCase)
         && !string.IsNullOrWhiteSpace(renderResults.BlobConnectionString)
         && !string.IsNullOrWhiteSpace(renderResults.BlobContainerName);
+}
+
+static bool ValidateApiKeyOptions(EnzoOptions options)
+{
+    var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var apiKey in options.ApiKeys)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey.Id)
+            || !ids.Add(apiKey.Id)
+            || !IsSha256Hex(apiKey.Sha256)
+            || apiKey.Scopes.Length == 0
+            || apiKey.Scopes.Any(scope => !IsKnownApiKeyScope(scope)))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool IsSha256Hex(string value)
+{
+    if (value.Length != 64)
+    {
+        return false;
+    }
+
+    try
+    {
+        return Convert.FromHexString(value).Length == 32;
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+    catch (ArgumentException)
+    {
+        return false;
+    }
+}
+
+static bool IsKnownApiKeyScope(string scope)
+{
+    return string.Equals(scope, ApiKeyScopes.All, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scope, ApiKeyScopes.Validate, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scope, ApiKeyScopes.Render, StringComparison.OrdinalIgnoreCase);
 }
 
 static bool ValidateRequestLimits(RequestLimitOptions limits)

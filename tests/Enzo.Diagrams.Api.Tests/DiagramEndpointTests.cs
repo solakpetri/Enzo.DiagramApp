@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Enzo.Diagrams.Application;
@@ -709,7 +710,23 @@ public sealed class DiagramEndpointTests
 
         var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
 
-        Assert.Contains("Enzo:ApiKey must be configured in production.", exception.Message);
+        Assert.Contains("Enzo:ApiKeys must contain at least one key in production.", exception.Message);
+    }
+
+    [Fact]
+    public void InvalidApiKeyHash_FailsStartup()
+    {
+        using var factory = new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Enzo:ApiKeys:0:Id", "broken");
+                builder.UseSetting("Enzo:ApiKeys:0:Sha256", "not-a-sha256-hash");
+                builder.UseSetting("Enzo:ApiKeys:0:Scopes:0", "*");
+            });
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("Enzo:ApiKeys is invalid.", exception.Message);
     }
 
     [Fact]
@@ -740,6 +757,32 @@ public sealed class DiagramEndpointTests
         request.Headers.Add("X-API-Key", "wrong-api-key");
 
         var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Render_ValidateScopedApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactoryWithApiKey(ApiKey, ["validate"]);
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "svg"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Validate_ExpiredApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactoryWithApiKey(ApiKey, ["*"], DateTimeOffset.UtcNow.AddMinutes(-1));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new { source = ValidSource });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -789,7 +832,7 @@ public sealed class DiagramEndpointTests
     private static WebApplicationFactory<global::Program> CreateFactory()
     {
         return new WebApplicationFactory<global::Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("Enzo:ApiKey", ApiKey));
+            .WithWebHostBuilder(ConfigureDefaultApiKey);
     }
 
     private static WebApplicationFactory<global::Program> CreateFactory(IRenderResultStore store)
@@ -797,7 +840,7 @@ public sealed class DiagramEndpointTests
         return new WebApplicationFactory<global::Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<IRenderResultStore>();
@@ -812,7 +855,7 @@ public sealed class DiagramEndpointTests
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Production");
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<IRenderResultStore>();
@@ -826,7 +869,7 @@ public sealed class DiagramEndpointTests
         return new WebApplicationFactory<global::Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 foreach (var (key, value) in settings)
                 {
                     builder.UseSetting(key, value);
@@ -834,11 +877,49 @@ public sealed class DiagramEndpointTests
             });
     }
 
-    private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory)
+    private static WebApplicationFactory<global::Program> CreateFactoryWithApiKey(
+        string apiKey,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset? expiresAt = null)
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder => ConfigureApiKey(builder, apiKey, scopes, expiresAt));
+    }
+
+    private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory, string apiKey = ApiKey)
     {
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+        client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         return client;
+    }
+
+    private static void ConfigureDefaultApiKey(IWebHostBuilder builder)
+    {
+        ConfigureApiKey(builder, ApiKey, ["*"]);
+    }
+
+    private static void ConfigureApiKey(
+        IWebHostBuilder builder,
+        string apiKey,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset? expiresAt = null)
+    {
+        builder.UseSetting("Enzo:ApiKeys:0:Id", "test-key");
+        builder.UseSetting("Enzo:ApiKeys:0:Sha256", Sha256Hex(apiKey));
+        for (var index = 0; index < scopes.Count; index++)
+        {
+            builder.UseSetting($"Enzo:ApiKeys:0:Scopes:{index}", scopes[index]);
+        }
+
+        if (expiresAt is not null)
+        {
+            builder.UseSetting("Enzo:ApiKeys:0:ExpiresAt", expiresAt.Value.ToString("O"));
+        }
+    }
+
+    private static string Sha256Hex(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
     private sealed class CapturingRenderResultStore : IRenderResultStore
