@@ -195,11 +195,28 @@ Infrastructure implements Application contracts for rendering and temporary arti
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full architecture description.
 
-## Benchmarks
+## Sequence benchmark highlights
 
-The final sequence benchmark used 30 scenarios with 5 runs per scenario against `gpt-4o-mini`. Enzo reached 99.3% eventual semantic-equivalent validity and a lower median successful TTVED than Mermaid, while Mermaid retained stronger first-pass validity and lower mean TTVED for complex cases.
+The final sequence-diagram benchmark used `gpt-4o-mini`, 30 sequence scenarios, 5 runs per scenario, 150 generations per language, temperature `0.2`, up to 3 repair attempts, and deterministic semantic-equivalence scoring with no LLM judge. These results apply to this defined sequence-generation benchmark only.
 
-Benchmarks are historical and offline by default. Do not rerun live OpenAI benchmarks as part of normal regression validation. See [BENCHMARKS.md](BENCHMARKS.md).
+| What | Enzo result |
+| --- | ---: |
+| Eventual equivalent validity | **99.3% vs 96.7%** |
+| Median tokens to valid diagram | **16.6% lower** |
+| Median equivalent-generation cost | **10.8% lower** |
+| Simple sequence diagrams | **~12.2% lower TTVED** |
+| Medium sequence diagrams | **~16.4% lower TTVED** |
+| Generated source size | **~14.0% smaller** |
+| Initial prompt/input tokens | **66 fewer on average** |
+| Unresolved generations | **1/150 vs 5/150** |
+
+TTV means Tokens to Valid Diagram. TTVED means Tokens to Valid Equivalent Diagram.
+
+Mermaid remained stronger on first-pass validity and had lower mean TTVED for complex sequence workloads. The benchmark therefore does not show that Enzo universally outperforms Mermaid; it shows specific advantages in compactness, median generation cost, and eventual semantic completion for this sequence-diagram workload.
+
+In this benchmark, Enzo was especially effective for simple and medium sequence diagrams. Medium scenarios used about 16% fewer tokens to reach an equivalent valid diagram, while Enzo also produced more compact diagram source and achieved 99.3% eventual semantic equivalence.
+
+Benchmarks are historical and offline by default. Do not rerun live OpenAI benchmarks as part of normal regression validation. See [BENCHMARKS.md](BENCHMARKS.md) for the full methodology, results, failed experiments, repair analysis, and limitations.
 
 ## Security / Self-Hosting
 
