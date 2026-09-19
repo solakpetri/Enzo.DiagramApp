@@ -12,7 +12,9 @@ permissions:
 jobs:
   review:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    # Keep this pinned to an immutable commit because the reusable workflow receives OPENAI_API_KEY.
-    uses: solakpetri/Enzo.Helpers.CodeReviewer/.github/workflows/review.yml@483510dd7f77ab9fa4460784539e043cfd60a56a
+    uses: solakpetri/Enzo.Helpers.CodeReviewer/.github/workflows/review.yml@main
+    with:
+      ENZO_CODE_REVIEWER_APP_ID: ${{ vars.ENZO_CODE_REVIEWER_APP_ID }}
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ENZO_CODE_REVIEWER_PRIVATE_KEY: ${{ secrets.ENZO_CODE_REVIEWER_PRIVATE_KEY }}
