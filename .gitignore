@@ -28,3 +28,7 @@ src/**/appsettings.*.Local.json
 
 *.tmp
 *.temp
+
+*.md
+!README.md
+!BENCHMARKS.md
