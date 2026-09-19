@@ -150,7 +150,7 @@ Updated documentation:
 - `PUBLIC_RELEASE_CHECKLIST.md`
 - `benchmarks/README.md`
 
-Documentation now reflects the implemented architecture, current API/CLI behavior, self-hosting status, stopped Azure hosting, retired MCP/Apps SDK/frontend features, benchmark limitations, and the absence of a root license file.
+Documentation now reflects the implemented architecture, current API/CLI behavior, self-hosting status, stopped Azure hosting, retired MCP/Apps SDK/frontend features, benchmark limitations, and repository licensing status.
 
 ## Known Gaps
 
@@ -159,7 +159,7 @@ Documentation now reflects the implemented architecture, current API/CLI behavio
 - Docker image build could not be completed because the Docker daemon was unavailable.
 - Live OpenAI/GPT benchmark execution was intentionally not performed.
 - All possible visual renderer regressions are not exhaustively snapshot-tested.
-- No root repository license file is present.
+- Repository licensing is now stated in the root MIT license file.
 
 ## Final Result
 

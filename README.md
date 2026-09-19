@@ -265,4 +265,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). DSL behavior, rendering output, API cont
 
 ## License
 
-No root repository license file is currently present. Until a license is added, do not assume open-source usage rights beyond viewing the public repository.
+Enzo Diagrams is licensed under the [MIT License](LICENSE).

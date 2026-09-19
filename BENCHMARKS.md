@@ -207,7 +207,7 @@ This was an observed result in this benchmark. It should not be treated as a gen
 
 ## Prompt Compression
 
-Enzo originally needed substantially more input tokens because the LLM had to be taught the proprietary DSL. Prompt compression reduced sequence syntax guidance to compact rules and canonical examples.
+Enzo originally needed substantially more input tokens because the LLM had to be taught the custom DSL. Prompt compression reduced sequence syntax guidance to compact rules and canonical examples.
 
 After compression, the confirmed benchmark measured:
 
@@ -217,7 +217,7 @@ Enzo:    218.9
 Mermaid: 284.9
 ```
 
-This reversed the previous proprietary-language prompt disadvantage. This matters because a custom DSL only makes sense for AI generation if teaching the language does not cost more than the resulting source savings.
+This reversed the previous custom-language prompt disadvantage. This matters because a custom DSL only makes sense for AI generation if teaching the language does not cost more than the resulting source savings.
 
 ## Repair Behavior
 

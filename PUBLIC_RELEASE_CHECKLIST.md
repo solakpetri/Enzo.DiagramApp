@@ -43,7 +43,7 @@ This checklist separates repository-verifiable items from external account or cl
 - [x] Documentation examples are covered by parser regression tests.
 - [x] Clean Architecture dependency direction is covered by tests.
 - [x] CLI package metadata keeps `PackageId = Enzo.Diagrams.Cli`.
-- [ ] License confirmed. No root repository license file is currently present.
+- [x] License confirmed. Root repository license file is MIT.
 
 ## GitHub About Recommendation
 
