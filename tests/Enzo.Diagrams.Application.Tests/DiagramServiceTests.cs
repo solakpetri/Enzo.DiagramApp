@@ -113,6 +113,30 @@ public sealed class DiagramServiceTests
     }
 
     [Fact]
+    public void ValidateBatch_WithMixedSources_ReturnsPerItemResultsInOrder()
+    {
+        var service = new DiagramService(new FakeRenderer());
+
+        var result = service.ValidateBatch([
+            new DiagramBatchValidationRequest("valid", ValidSequenceSource),
+            new DiagramBatchValidationRequest("invalid", "sequence Checkout\nactor Customer\nCustomer -> Api: Checkout")
+        ]);
+
+        Assert.Collection(result,
+            item =>
+            {
+                Assert.Equal("valid", item.Id);
+                Assert.True(item.Validation.IsSuccess);
+            },
+            item =>
+            {
+                Assert.Equal("invalid", item.Id);
+                Assert.False(item.Validation.IsSuccess);
+                Assert.Contains(item.Validation.ParseResult.ValidationErrors, error => error.Kind == "UnknownMessageTarget");
+            });
+    }
+
+    [Fact]
     public void Render_WhenPngRendererFails_PropagatesRendererException()
     {
         var service = new DiagramService(new ThrowingPngRenderer());

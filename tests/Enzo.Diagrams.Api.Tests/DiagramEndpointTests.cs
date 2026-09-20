@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Enzo.Diagrams.Application;
@@ -64,15 +65,21 @@ public sealed class DiagramEndpointTests
         var root = json.RootElement;
         var paths = root.GetProperty("paths");
         var validatePost = paths.GetProperty("/v1/validate").GetProperty("post");
+        var batchValidatePost = paths.GetProperty("/v1/validate/batch").GetProperty("post");
         var renderPost = paths.GetProperty("/v1/render").GetProperty("post");
 
         Assert.Equal("Validate Enzo.Diagrams DSL.", validatePost.GetProperty("summary").GetString());
+        Assert.Equal("Validate multiple Enzo.Diagrams DSL documents.", batchValidatePost.GetProperty("summary").GetString());
         Assert.Equal("Render Enzo.Diagrams DSL.", renderPost.GetProperty("summary").GetString());
         Assert.Contains("source DSL", renderPost.GetProperty("description").GetString());
         Assert.Contains("svg and png", renderPost.GetProperty("description").GetString());
         AssertRequestSchema(validatePost, "ValidateDiagramRequest");
+        AssertRequestSchema(batchValidatePost, "BatchValidateDiagramRequest");
         AssertRequestSchema(renderPost, "RenderDiagramRequest");
         AssertResponseContent(validatePost, "200", "application/json");
+        AssertResponseContent(batchValidatePost, "200", "application/json");
+        AssertResponseContent(batchValidatePost, "400", "application/problem+json");
+        AssertResponseContent(batchValidatePost, "413", "application/problem+json");
         AssertResponseContent(validatePost, "400", "application/problem+json");
         AssertResponseContent(validatePost, "413", "application/problem+json");
         AssertResponseContent(renderPost, "200", "image/svg+xml");
@@ -82,6 +89,7 @@ public sealed class DiagramEndpointTests
         AssertResponseContent(renderPost, "413", "application/problem+json");
         AssertApiKeySecurityScheme(root);
         AssertApiKeySecurityRequirement(validatePost);
+        AssertApiKeySecurityRequirement(batchValidatePost);
         AssertApiKeySecurityRequirement(renderPost);
 
         var renderRequestSchema = root.GetProperty("components").GetProperty("schemas").GetProperty("RenderDiagramRequest");
@@ -175,6 +183,54 @@ public sealed class DiagramEndpointTests
         Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
             error.GetProperty("type").GetString() == "syntax"
             && error.GetProperty("line").GetInt32() == 2);
+    }
+
+    [Fact]
+    public async Task BatchValidate_MixedSources_ReturnsPerItemResults()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/validate/batch", new
+        {
+            items = new[]
+            {
+                new { id = "good-flow", source = ValidSource },
+                new { id = "bad-sequence", source = "sequence Checkout\nactor Customer\nCustomer -> API: Checkout" }
+            }
+        });
+
+        response.EnsureSuccessStatusCode();
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        var root = json.RootElement;
+        var items = root.GetProperty("items").EnumerateArray().ToArray();
+
+        Assert.Equal(2, root.GetProperty("total").GetInt32());
+        Assert.Equal(1, root.GetProperty("valid").GetInt32());
+        Assert.Equal("good-flow", items[0].GetProperty("id").GetString());
+        Assert.True(items[0].GetProperty("valid").GetBoolean());
+        Assert.Empty(items[0].GetProperty("errors").EnumerateArray());
+        Assert.Equal("bad-sequence", items[1].GetProperty("id").GetString());
+        Assert.False(items[1].GetProperty("valid").GetBoolean());
+        Assert.Contains(items[1].GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "UnknownMessageTarget");
+    }
+
+    [Fact]
+    public async Task BatchValidate_TooManyItems_ReturnsProblemDetails()
+    {
+        await using var factory = CreateFactory();
+        using var client = CreateAuthenticatedClient(factory);
+        var items = Enumerable.Range(0, 51).Select(index => new { id = index.ToString(), source = ValidSource }).ToArray();
+
+        var response = await client.PostAsJsonAsync("/v1/validate/batch", new { items });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(content);
+        Assert.Contains(json.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            error.GetProperty("code").GetString() == "batch_too_large");
     }
 
     [Fact]
@@ -654,7 +710,23 @@ public sealed class DiagramEndpointTests
 
         var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
 
-        Assert.Contains("Enzo:ApiKey must be configured in production.", exception.Message);
+        Assert.Contains("Enzo:ApiKeys must contain at least one key in production.", exception.Message);
+    }
+
+    [Fact]
+    public void InvalidApiKeyHash_FailsStartup()
+    {
+        using var factory = new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Enzo:ApiKeys:0:Id", "broken");
+                builder.UseSetting("Enzo:ApiKeys:0:Sha256", "not-a-sha256-hash");
+                builder.UseSetting("Enzo:ApiKeys:0:Scopes:0", "*");
+            });
+
+        var exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+
+        Assert.Contains("Enzo:ApiKeys is invalid.", exception.Message);
     }
 
     [Fact]
@@ -685,6 +757,32 @@ public sealed class DiagramEndpointTests
         request.Headers.Add("X-API-Key", "wrong-api-key");
 
         var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Render_ValidateScopedApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactoryWithApiKey(ApiKey, ["validate"]);
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/render", new
+        {
+            source = ValidSource,
+            format = "svg"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Validate_ExpiredApiKey_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactoryWithApiKey(ApiKey, ["*"], DateTimeOffset.UtcNow.AddMinutes(-1));
+        using var client = CreateAuthenticatedClient(factory);
+
+        var response = await client.PostAsJsonAsync("/v1/validate", new { source = ValidSource });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -734,7 +832,7 @@ public sealed class DiagramEndpointTests
     private static WebApplicationFactory<global::Program> CreateFactory()
     {
         return new WebApplicationFactory<global::Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("Enzo:ApiKey", ApiKey));
+            .WithWebHostBuilder(ConfigureDefaultApiKey);
     }
 
     private static WebApplicationFactory<global::Program> CreateFactory(IRenderResultStore store)
@@ -742,7 +840,7 @@ public sealed class DiagramEndpointTests
         return new WebApplicationFactory<global::Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<IRenderResultStore>();
@@ -757,7 +855,7 @@ public sealed class DiagramEndpointTests
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Production");
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<IRenderResultStore>();
@@ -771,7 +869,7 @@ public sealed class DiagramEndpointTests
         return new WebApplicationFactory<global::Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("Enzo:ApiKey", ApiKey);
+                ConfigureDefaultApiKey(builder);
                 foreach (var (key, value) in settings)
                 {
                     builder.UseSetting(key, value);
@@ -779,11 +877,49 @@ public sealed class DiagramEndpointTests
             });
     }
 
-    private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory)
+    private static WebApplicationFactory<global::Program> CreateFactoryWithApiKey(
+        string apiKey,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset? expiresAt = null)
+    {
+        return new WebApplicationFactory<global::Program>()
+            .WithWebHostBuilder(builder => ConfigureApiKey(builder, apiKey, scopes, expiresAt));
+    }
+
+    private static HttpClient CreateAuthenticatedClient(WebApplicationFactory<global::Program> factory, string apiKey = ApiKey)
     {
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+        client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         return client;
+    }
+
+    private static void ConfigureDefaultApiKey(IWebHostBuilder builder)
+    {
+        ConfigureApiKey(builder, ApiKey, ["*"]);
+    }
+
+    private static void ConfigureApiKey(
+        IWebHostBuilder builder,
+        string apiKey,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset? expiresAt = null)
+    {
+        builder.UseSetting("Enzo:ApiKeys:0:Id", "test-key");
+        builder.UseSetting("Enzo:ApiKeys:0:Sha256", Sha256Hex(apiKey));
+        for (var index = 0; index < scopes.Count; index++)
+        {
+            builder.UseSetting($"Enzo:ApiKeys:0:Scopes:{index}", scopes[index]);
+        }
+
+        if (expiresAt is not null)
+        {
+            builder.UseSetting("Enzo:ApiKeys:0:ExpiresAt", expiresAt.Value.ToString("O"));
+        }
+    }
+
+    private static string Sha256Hex(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
     private sealed class CapturingRenderResultStore : IRenderResultStore

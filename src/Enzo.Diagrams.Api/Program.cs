@@ -13,8 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddOptions<EnzoOptions>()
     .Bind(builder.Configuration.GetSection(EnzoOptions.SectionName))
-    .Validate(options => !builder.Environment.IsProduction() || !string.IsNullOrWhiteSpace(options.ApiKey),
-        "Enzo:ApiKey must be configured in production.")
+    .Validate(options => !builder.Environment.IsProduction() || options.ApiKeys.Count > 0,
+        "Enzo:ApiKeys must contain at least one key in production.")
+    .Validate(ValidateApiKeyOptions, "Enzo:ApiKeys is invalid.")
     .Validate(ValidateRenderResultOptions, "Enzo:RenderResults is invalid.")
     .Validate(options => ValidateRequestLimits(options.Limits), "Enzo:Limits is invalid.")
     .ValidateOnStart();
@@ -99,6 +100,48 @@ app.MapPost("/v1/validate", async (
 .Accepts<ValidateDiagramRequest>("application/json")
 .Produces<ValidateDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Validate))
+.AddEndpointFilter<ApiKeyEndpointFilter>()
+.ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+.ProducesProblem(StatusCodes.Status400BadRequest);
+
+app.MapPost("/v1/validate/batch", async (
+    HttpRequest httpRequest,
+    DiagramService diagrams,
+    IOptions<EnzoOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    var limits = options.Value.Limits;
+    var (request, readError) = await ReadRequestAsync<BatchValidateDiagramRequest>(httpRequest, limits, cancellationToken);
+    if (readError is not null)
+    {
+        return readError;
+    }
+
+    if (!TryGetBatchValidationItems(request!, limits, out var items, out var inputError))
+    {
+        return inputError;
+    }
+
+    var results = diagrams.ValidateBatch(items, ToDiagramComplexityLimits(limits));
+    var responseItems = results.Select(result => new BatchValidateDiagramItemResponse(
+        result.Id,
+        result.Validation.IsSuccess,
+        result.Validation.IsSuccess ? [] : ToDiagramErrors(result.Validation))).ToArray();
+
+    return Results.Ok(new BatchValidateDiagramResponse(
+        responseItems.Length,
+        responseItems.Count(item => item.Valid),
+        responseItems));
+})
+.WithName("BatchValidateDiagrams")
+.WithTags("Diagrams")
+.WithSummary("Validate multiple Enzo.Diagrams DSL documents.")
+.WithDescription("Parses and validates up to 50 source DSL documents in one request. Request shape errors return ProblemDetails. Per-diagram syntax, validation, and complexity errors are returned in the item results.")
+.Accepts<BatchValidateDiagramRequest>("application/json")
+.Produces<BatchValidateDiagramResponse>()
+.ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Validate))
 .AddEndpointFilter<ApiKeyEndpointFilter>()
 .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
 .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -221,6 +264,7 @@ app.MapPost("/v1/render", async (
 .Produces(StatusCodes.Status200OK)
 .Produces<HostedRenderDiagramResponse>()
 .ProducesProblem(StatusCodes.Status401Unauthorized)
+.WithMetadata(new ApiKeyScopeRequirement(ApiKeyScopes.Render))
 .AddEndpointFilter<ApiKeyEndpointFilter>()
 .AddOpenApiOperationTransformer((operation, _, _) =>
 {
@@ -360,6 +404,7 @@ static Task AddApiKeySecurityScheme(OpenApiDocument document, OpenApiDocumentTra
         Name = ApiKeyEndpointFilter.HeaderName
     };
     AddApiKeySecurityRequirement(document, "/v1/validate");
+    AddApiKeySecurityRequirement(document, "/v1/validate/batch");
     AddApiKeySecurityRequirement(document, "/v1/render");
 
     return Task.CompletedTask;
@@ -418,6 +463,49 @@ static DiagramComplexityLimits ToDiagramComplexityLimits(RequestLimitOptions lim
     return new DiagramComplexityLimits(limits.MaxDiagramElements, limits.MaxDiagramConnections);
 }
 
+static bool TryGetBatchValidationItems(
+    BatchValidateDiagramRequest request,
+    RequestLimitOptions limits,
+    out IReadOnlyList<DiagramBatchValidationRequest> items,
+    out IResult error)
+{
+    const int maxBatchValidationItems = 50;
+    items = [];
+    if (request.Items is null || request.Items.Count == 0)
+    {
+        error = InvalidRequestProblem("At least one batch item is required.", [
+            new DiagramProblemError("request", null, null, "Items must contain at least one diagram.", "required")
+        ]);
+        return false;
+    }
+
+    if (request.Items.Count > maxBatchValidationItems)
+    {
+        error = InvalidRequestProblem("Too many batch items.", [
+            new DiagramProblemError("request", null, null, $"Items must contain at most {maxBatchValidationItems} diagrams.", "batch_too_large")
+        ]);
+        return false;
+    }
+
+    var validationItems = new List<DiagramBatchValidationRequest>(request.Items.Count);
+    for (var index = 0; index < request.Items.Count; index++)
+    {
+        var item = request.Items[index];
+        if (!TryGetSource(item.Source, limits, out var source, out error))
+        {
+            return false;
+        }
+
+        validationItems.Add(new DiagramBatchValidationRequest(
+            string.IsNullOrWhiteSpace(item.Id) ? index.ToString() : item.Id.Trim(),
+            source));
+    }
+
+    items = validationItems;
+    error = Results.Empty;
+    return true;
+}
+
 static RenderResultStorageOptions ToRenderResultStorageOptions(RenderResultOptions options)
 {
     return new RenderResultStorageOptions
@@ -464,6 +552,52 @@ static bool ValidateRenderResultOptions(EnzoOptions options)
     return string.Equals(renderResults.Store, "AzureBlob", StringComparison.OrdinalIgnoreCase)
         && !string.IsNullOrWhiteSpace(renderResults.BlobConnectionString)
         && !string.IsNullOrWhiteSpace(renderResults.BlobContainerName);
+}
+
+static bool ValidateApiKeyOptions(EnzoOptions options)
+{
+    var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var apiKey in options.ApiKeys)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey.Id)
+            || !ids.Add(apiKey.Id)
+            || !IsSha256Hex(apiKey.Sha256)
+            || apiKey.Scopes.Length == 0
+            || apiKey.Scopes.Any(scope => !IsKnownApiKeyScope(scope)))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool IsSha256Hex(string value)
+{
+    if (value.Length != 64)
+    {
+        return false;
+    }
+
+    try
+    {
+        return Convert.FromHexString(value).Length == 32;
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+    catch (ArgumentException)
+    {
+        return false;
+    }
+}
+
+static bool IsKnownApiKeyScope(string scope)
+{
+    return string.Equals(scope, ApiKeyScopes.All, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scope, ApiKeyScopes.Validate, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scope, ApiKeyScopes.Render, StringComparison.OrdinalIgnoreCase);
 }
 
 static bool ValidateRequestLimits(RequestLimitOptions limits)
@@ -560,6 +694,11 @@ static IResult HostedRenderStorageProblem(string detail)
 
 static IReadOnlyList<DiagramProblemError> ToDiagramErrors(DiagramValidationResult result)
 {
+    if (result.LimitViolation is not null)
+    {
+        return [new DiagramProblemError("request", null, null, result.LimitViolation.Message, result.LimitViolation.Code)];
+    }
+
     var errors = new List<DiagramProblemError>();
 
     errors.AddRange(result.ParseResult.Errors.Select(error =>

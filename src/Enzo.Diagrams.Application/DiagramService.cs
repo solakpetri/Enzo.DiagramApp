@@ -14,6 +14,19 @@ public sealed class DiagramService(IDiagramRenderer renderer)
         return new DiagramValidationResult(parseResult, limitViolation);
     }
 
+    public IReadOnlyList<DiagramBatchValidationResult> ValidateBatch(
+        IReadOnlyList<DiagramBatchValidationRequest> requests,
+        DiagramComplexityLimits? limits = null)
+    {
+        var results = new List<DiagramBatchValidationResult>(requests.Count);
+        foreach (var request in requests)
+        {
+            results.Add(new DiagramBatchValidationResult(request.Id, Validate(request.Source, limits)));
+        }
+
+        return results;
+    }
+
     public DiagramRenderResult Render(
         string source,
         DiagramRenderFormat format,
@@ -45,6 +58,10 @@ public sealed record DiagramValidationResult(
 {
     public bool IsSuccess => ParseResult.IsSuccess && LimitViolation is null;
 }
+
+public sealed record DiagramBatchValidationRequest(string Id, string Source);
+
+public sealed record DiagramBatchValidationResult(string Id, DiagramValidationResult Validation);
 
 public sealed record DiagramRenderResult(
     DiagramValidationResult Validation,

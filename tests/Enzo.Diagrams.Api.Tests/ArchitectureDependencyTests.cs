@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Enzo.Diagrams.Application;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -61,12 +63,22 @@ public sealed class ArchitectureDependencyTests
     public void ApiComposition_ResolvesApplicationAndInfrastructureServices()
     {
         using var factory = new WebApplicationFactory<global::Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("Enzo:ApiKey", "test-api-key"));
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Enzo:ApiKeys:0:Id", "test-key");
+                builder.UseSetting("Enzo:ApiKeys:0:Sha256", Sha256Hex("test-api-key"));
+                builder.UseSetting("Enzo:ApiKeys:0:Scopes:0", "*");
+            });
         using var scope = factory.Services.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<DiagramService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDiagramRenderer>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRenderResultStore>());
+    }
+
+    private static string Sha256Hex(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
     private static string FindRepositoryRoot()
